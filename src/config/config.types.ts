@@ -24,6 +24,7 @@ export interface EntitySelectorFilter {
   domains?: string[];
   deviceClasses?: string[];
   stateClasses?: string[];
+  predicate?: (entityId: string) => boolean;
 }
 
 export interface ConfigChangedDetail<TConfig extends BaseCardConfig = BaseCardConfig> {

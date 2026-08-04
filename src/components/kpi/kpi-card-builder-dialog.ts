@@ -22,6 +22,8 @@ import {
 import "../entity-selector";
 import "../common/app-dialog";
 import "../common/button";
+import "../common/confirm-dialog";
+import "../common/dialog-footer";
 import "../common/segmented-control";
 import "../common/icon-input";
 import "../common/field";
@@ -39,6 +41,7 @@ export class KpiCardBuilderDialog extends LitElement {
     hass: { attribute: false },
     draft: { attribute: false },
     existingIds: { attribute: false },
+    deleteConfirmOpen: { state: true },
   };
 
   open = false;
@@ -46,6 +49,7 @@ export class KpiCardBuilderDialog extends LitElement {
   hass?: HomeAssistant;
   draft: KpiCardDraft = {};
   existingIds: string[] = [];
+  private deleteConfirmOpen = false;
 
   private formDraft: KpiCardDraft = {};
   private validation: KpiCardDraftValidation = {
@@ -57,12 +61,17 @@ export class KpiCardBuilderDialog extends LitElement {
   static styles = [css`
     :host {
       display: contents;
+      --en-label-font-weight: 400;
+      container-type: inline-size;
     }
 
     ic-app-dialog {
       --app-dialog-width: 560px;
       --app-dialog-radius: var(--ic-radius-dialog);
       --app-dialog-body-padding: 0;
+      width: min(100%, 100%);
+      max-width: 100%;
+      container-type: inline-size;
     }
 
     .form {
@@ -70,6 +79,10 @@ export class KpiCardBuilderDialog extends LitElement {
       gap: 24px;
       padding: 8px 32px 32px;
       color: var(--en-text-primary, var(--primary-text-color));
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      box-sizing: border-box;
     }
 
     .section {
@@ -88,14 +101,30 @@ export class KpiCardBuilderDialog extends LitElement {
     label {
       display: grid;
       gap: 6px;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
       font-size: 0.82rem;
       color: var(--en-text-secondary, var(--secondary-text-color));
+      box-sizing: border-box;
     }
 
-    .row {
+    .appearance-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 12px;
+      align-items: start;
+      column-gap: 16px;
+      row-gap: 14px;
+      min-width: 0;
+      width: 100%;
+      max-width: 100%;
+    }
+
+    .appearance-grid > * {
+      min-width: 0;
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
     }
 
     .checkbox {
@@ -107,13 +136,6 @@ export class KpiCardBuilderDialog extends LitElement {
     .error {
       color: var(--error-color);
       font-size: 0.76rem;
-    }
-
-    .footer {
-      display: flex;
-      align-items: center;
-      justify-content: flex-end;
-      gap: 8px;
     }
 
     button {
@@ -134,6 +156,9 @@ export class KpiCardBuilderDialog extends LitElement {
     .preview {
       display: grid;
       gap: 8px;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
     }
 
     .preview-label {
@@ -148,22 +173,39 @@ export class KpiCardBuilderDialog extends LitElement {
       display: block;
       height: 160px;
       pointer-events: none;
-    }
-
-    .delete {
-      margin-right: auto;
-      color: var(--error-color);
-    }
-
-    .footer {
       width: 100%;
+      max-width: 100%;
+      min-width: 0;
       box-sizing: border-box;
-      padding: 16px 32px 24px;
     }
 
-    @media (max-width: 520px) {
-      .row {
+    @container (max-width: 719px) {
+      .form {
+        padding: 8px 16px 20px;
+      }
+
+      .appearance-grid {
         grid-template-columns: 1fr;
+        row-gap: 16px;
+      }
+
+      .preview energy-kpi-card {
+        height: 126px;
+      }
+    }
+
+    @media (max-width: 719px) {
+      .form {
+        padding: 8px 16px 20px;
+      }
+
+      .appearance-grid {
+        grid-template-columns: 1fr;
+        row-gap: 16px;
+      }
+
+      .preview energy-kpi-card {
+        height: 126px;
       }
     }
   `, dialogContentStyle];
@@ -176,6 +218,7 @@ export class KpiCardBuilderDialog extends LitElement {
       this.formDraft = { ...this.draft };
       this.validation = { valid: true, errors: {} };
       this.showEntitySelector = false;
+      this.deleteConfirmOpen = false;
     }
   }
 
@@ -192,6 +235,7 @@ export class KpiCardBuilderDialog extends LitElement {
   }
 
   private close() {
+    this.deleteConfirmOpen = false;
     this.dispatchEvent(
       new CustomEvent("kpi-builder-close", {
         bubbles: true,
@@ -236,9 +280,15 @@ export class KpiCardBuilderDialog extends LitElement {
     );
   }
 
+  private requestDeleteConfirmation() {
+    if (this.mode !== "edit") return;
+    this.deleteConfirmOpen = true;
+  }
+
   private requestDelete() {
     const id = normalizeKpiCardDraft(this.formDraft).id;
     if (!id || this.mode !== "edit") return;
+    this.deleteConfirmOpen = false;
     this.dispatchEvent(
       new CustomEvent("kpi-builder-delete", {
         detail: { id },
@@ -305,7 +355,7 @@ export class KpiCardBuilderDialog extends LitElement {
 
           <div class="section">
             <div class="section-title">Appearance</div>
-            <div class="row">
+            <div class="appearance-grid">
               <ic-icon-input
                 .value=${normalized.icon ?? ""}
                 @icon-change=${(event: CustomEvent<IconChangeDetail>) =>
@@ -319,9 +369,9 @@ export class KpiCardBuilderDialog extends LitElement {
 
               <label>
                 Decimals
-                <ic-segmented-control width="fit" label="Decimals"
+                <ic-segmented-control width="full" label="Decimals"
                   .value=${String(normalized.decimals)}
-                  .options=${[0,1,2,3,4,5,6].map((value) => ({ value:String(value), label:String(value) }))}
+                  .options=${[0,1,2,3,4].map((value) => ({ value:String(value), label:String(value) }))}
                   @segmented-change=${(event:CustomEvent<SegmentedChangeDetail>) =>
                     this.updateField("decimals", event.detail.value)}>
                 </ic-segmented-control>
@@ -330,13 +380,32 @@ export class KpiCardBuilderDialog extends LitElement {
                   : null}
               </label>
 
-              <label class="checkbox">
+              <label>
                 Automatic unit scaling
-                <ic-segmented-control width="fit" label="Automatic unit scaling"
+                <ic-segmented-control width="full" label="Automatic unit scaling"
                   .value=${normalized.autoScale ? "on" : "off"}
                   .options=${[{value:"off",label:"Off"},{value:"on",label:"On"}]}
                   @segmented-change=${(event:CustomEvent<SegmentedChangeDetail>) =>
                     this.updateField("autoScale", event.detail.value === "on")}>
+                </ic-segmented-control>
+              </label>
+
+              <ic-field label="Subtitle" .value=${normalized.subtitle ?? ""}
+                placeholder="Leave blank to hide the subtitle"
+                @field-input=${(event:CustomEvent<FieldValueDetail>) =>
+                  this.updateField("subtitle", event.detail.value)}></ic-field>
+
+              <label>
+                Subtitle Behavior
+                <ic-segmented-control width="full" label="Subtitle behavior"
+                  .value=${normalized.trendMode ?? "none"}
+                  .options=${[
+                    { value: "none", label: "Hide" },
+                    { value: "vs_yesterday", label: "Yesterday" },
+                    { value: "vs_last_period", label: "Last period" },
+                  ]}
+                  @segmented-change=${(event:CustomEvent<SegmentedChangeDetail>) =>
+                    this.updateField("trendMode", event.detail.value as "none" | "vs_yesterday" | "vs_last_period")}>
                 </ic-segmented-control>
               </label>
             </div>
@@ -357,20 +426,28 @@ export class KpiCardBuilderDialog extends LitElement {
           </div>
         </div>
 
-        <div class="footer" slot="footer">
+        <ic-dialog-footer slot="footer">
           ${this.mode === "edit"
             ? html`
-                <ic-button variant="destructive" @click=${this.requestDelete}>
+                <ic-button slot="leading" variant="destructive" @click=${this.requestDeleteConfirmation}>
                   Delete
                 </ic-button>
               `
             : null}
           <ic-button @click=${this.close}>Cancel</ic-button>
           <ic-button variant="primary" @click=${this.submit}>
-            ${this.mode === "edit" ? "Save" : "Create"}
+            ${this.mode === "edit" ? "Save" : "Add Card"}
           </ic-button>
-        </div>
+        </ic-dialog-footer>
       </ic-app-dialog>
+      <ic-confirm-dialog
+        .open=${this.deleteConfirmOpen}
+        title="Delete KPI Card?"
+        message="This card will be removed from the dashboard."
+        confirm-label="Delete"
+        @confirm-cancel=${() => { this.deleteConfirmOpen = false; }}
+        @confirm-accept=${this.requestDelete}
+      ></ic-confirm-dialog>
     `;
   }
 }

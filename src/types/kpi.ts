@@ -1,3 +1,5 @@
+export type KpiTrendMode = "none" | "vs_yesterday" | "vs_last_period";
+
 export interface CustomKpiConfig {
   type?: string;
   id?: string;
@@ -12,7 +14,10 @@ export interface CustomKpiConfig {
   decimals?: number;
   order?: number;
   precision?: number;
+  subtitle?: string;
+  /** @deprecated Legacy subtitle field. Read for migration only. */
   trend?: string;
+  trendMode?: KpiTrendMode;
   history?: number[];
   entityType?: string;
   icon_bg?: string;

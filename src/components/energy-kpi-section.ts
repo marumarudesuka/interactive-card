@@ -200,7 +200,7 @@ export class EnergyKpiSection extends LitElement {
     .grid{
       --kpi-card-height:170px;
       --kpi-padding:20px;
-      --kpi-value-size:50px;
+      --kpi-value-size:42px;
       --kpi-unit-size:16px;
       --kpi-icon-size:64px;
       --kpi-icon-symbol-size:30px;
@@ -238,7 +238,7 @@ export class EnergyKpiSection extends LitElement {
       .grid{
         --kpi-card-height:160px;
         --kpi-padding:18px;
-        --kpi-value-size:48px;
+        --kpi-value-size:40px;
         --kpi-icon-size:58px;
         --kpi-icon-symbol-size:28px;
       }
@@ -248,7 +248,7 @@ export class EnergyKpiSection extends LitElement {
       .grid{
         --kpi-card-height:150px;
         --kpi-padding:14px;
-        --kpi-value-size:clamp(24px,7vw,32px);
+        --kpi-value-size:clamp(16px,7vw,24px);
         --kpi-unit-size:13px;
         --kpi-icon-size:46px;
         --kpi-icon-symbol-size:23px;
@@ -477,6 +477,35 @@ export class EnergyKpiSection extends LitElement {
     if(result.changed) this._commitConfigChange(result.cards);
   }
 
+  private _handleUpdateCardSettings(e:any){
+    const detail = e.detail || {};
+    const key = detail.key;
+    if(!key) return;
+
+    const result = kpiCardManager.update(this.config.cards, key, {
+      subtitle: detail.subtitle ?? "",
+      trend: undefined,
+      trendMode: detail.trendMode ?? "none",
+    });
+
+    if(result.changed) this._commitConfigChange(result.cards);
+  }
+
+  private _handleDeleteCard(e:CustomEvent<{ id:string }>){
+    e.stopPropagation();
+    const id = e.detail?.id;
+    if(!id) return;
+    const card = this.config.cards.find(
+      (item) => getKpiCardKey(item) === id
+    );
+    if(!card) return;
+
+    const result = isCustomKpi(card)
+      ? kpiCardManager.remove(this.config.cards, id)
+      : kpiCardManager.disable(this.config.cards, id);
+    if(result.changed) this._commitConfigChange(result.cards);
+  }
+
 
 
 
@@ -625,7 +654,10 @@ export class EnergyKpiSection extends LitElement {
                   .config=${card}
                   .hass=${this._hass}
                   .validation=${validation}
+                  @edit-custom-kpi=${this._openEditBuilder}
                   @set-card-entity=${(ev:any)=>{ ev.stopPropagation(); this._handleSetCardEntity(ev); }}
+                  @update-kpi-card-settings=${(ev:any)=>{ ev.stopPropagation(); this._handleUpdateCardSettings(ev); }}
+                  @delete-kpi-card=${this._handleDeleteCard}
                 ></energy-kpi-card>
               </div>
 

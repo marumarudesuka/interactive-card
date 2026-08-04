@@ -15,6 +15,8 @@ export class IcButton extends LitElement {
     :host { display:inline-flex; }
     button {
       display:inline-flex;
+      width:var(--ic-button-width,auto);
+      box-sizing:border-box;
       align-items:center;
       justify-content:center;
       gap:var(--en-control-gap,8px);

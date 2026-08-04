@@ -6,6 +6,7 @@ import type { IconPickerChangeDetail } from "../common/icon-picker";
 import type { DialogCloseDetail } from "../common/app-dialog";
 import type { CircuitConfig } from "../../types/circuit";
 import { resolveCircuit } from "../../helpers/circuit-utils";
+import { isRealTimePowerEntity } from "../../helpers/power-entity";
 import { dialogContentStyle } from "../../design-system/dialog";
 import {
   formatEntityId,
@@ -26,6 +27,8 @@ export interface CircuitConfigChangedDetail {
 
 export interface CircuitDeleteRequestDetail {
   circuitId: string;
+  complete?: () => void;
+  fail?: () => void;
 }
 
 export class CircuitSettingsModal extends LitElement {
@@ -44,6 +47,7 @@ export class CircuitSettingsModal extends LitElement {
   private entityPickerExpanded = false;
   private iconPickerExpanded = false;
   private saving = false;
+  private deleting = false;
 
   static styles = [css`
     :host {
@@ -75,7 +79,15 @@ export class CircuitSettingsModal extends LitElement {
     }
 
     .actions { justify-content:flex-end; padding-top:4px; }
+    .delete-action { margin-inline-end:auto; }
     .inline-field-group { display:grid; min-width:0; }
+    .entity-error {
+      margin: 6px 0 0;
+      color: var(--error-color, #ff3b30);
+      font-size: var(--en-helper-font-size, 13px);
+      font-weight: 400;
+      line-height: 1.3;
+    }
   `, dialogContentStyle];
 
   protected willUpdate(changed:PropertyValues<this>) {
@@ -87,6 +99,7 @@ export class CircuitSettingsModal extends LitElement {
       this.entityPickerExpanded = false;
       this.iconPickerExpanded = false;
       this.saving = false;
+      this.deleting = false;
     }
   }
 
@@ -95,6 +108,7 @@ export class CircuitSettingsModal extends LitElement {
     this.entityPickerExpanded = false;
     this.iconPickerExpanded = false;
     this.saving = false;
+    this.deleting = false;
     this.dispatchEvent(new CustomEvent("circuit-settings-close", {
       bubbles: true,
       composed: true,
@@ -148,9 +162,12 @@ export class CircuitSettingsModal extends LitElement {
       ? `${state.state}${unit ? ` ${unit}` : ""}`
       : "--";
 
+    const validationMessage = this.entityValidationMessage;
+
     return html`<div class="inline-field-group entity-field-group"
       @click=${(event:Event) => event.stopPropagation()}>
       <ic-field label="Sensor" variant="selectable" .value=${friendlyName}
+        .invalid=${Boolean(validationMessage)}
         aria-expanded=${this.entityPickerExpanded}
         @field-activate=${() => {
           this.entityPickerExpanded = !this.entityPickerExpanded;
@@ -170,20 +187,45 @@ export class CircuitSettingsModal extends LitElement {
           variant="inline"
           .hass=${this.hass}
           .value=${this.draft?.entity ?? ""}
-          .filter=${{}}
-          .preferredDeviceClasses=${["power", "energy"]}
-          .preferredUnits=${["W", "kW", "MW", "Wh", "kWh", "MWh"]}
+          .filter=${{
+            domains:["sensor"],
+            predicate:(entityId:string) => isRealTimePowerEntity(
+              entityId,
+              this.hass?.states[entityId]
+            ),
+          }}
+          .preferredDeviceClasses=${["power"]}
+          .preferredUnits=${["W", "kW", "MW"]}
           @entity-selected=${this.selectEntity}
         ></ic-entity-selector>
       ` : null}
+      ${validationMessage
+        ? html`<div class="entity-error" role="alert">${validationMessage}</div>`
+        : null}
     </div>`;
   }
 
+  private get entityValidationMessage(): string {
+    const entityId = this.draft?.entity.trim() ?? "";
+    if (!entityId) return "";
+    return isRealTimePowerEntity(entityId, this.hass?.states[entityId])
+      ? ""
+      : "This entity is not a real-time power sensor. Select a sensor using W, kW, or MW.";
+  }
+
+  private get hasValidPowerEntity(): boolean {
+    const entityId = this.draft?.entity.trim() ?? "";
+    return Boolean(entityId) && isRealTimePowerEntity(
+      entityId,
+      this.hass?.states[entityId]
+    );
+  }
+
   private get canSave(): boolean {
-    if (!this.draft || this.saving) return false;
+    if (!this.draft || this.saving || this.deleting) return false;
     const name = this.draft.name.trim();
     const entity = this.draft.entity.trim();
-    if (!name || !entity) return false;
+    if (!name || !entity || !this.hasValidPowerEntity) return false;
     if (!this.circuit) return true;
     return name !== this.circuit.name.trim() ||
       entity !== this.circuit.entity.trim() ||
@@ -238,7 +280,10 @@ export class CircuitSettingsModal extends LitElement {
       icon: this.draft.icon?.trim() || undefined,
       category: this.draft.category?.trim() || undefined,
     };
-    if (!circuit.name || !circuit.entity) return;
+    if (!circuit.name || !circuit.entity || !this.hasValidPowerEntity) {
+      this.requestUpdate();
+      return;
+    }
 
     this.saving = true;
     this.requestUpdate();
@@ -257,6 +302,29 @@ export class CircuitSettingsModal extends LitElement {
         }
       )
     );
+  }
+
+  private deleteCircuit() {
+    if (this.mode !== "edit" || !this.circuit || this.saving || this.deleting) {
+      return;
+    }
+    this.deleting = true;
+    this.requestUpdate();
+    const detail: CircuitDeleteRequestDetail = {
+      circuitId: this.circuit.id,
+      complete: () => {
+        this.deleting = false;
+        this.close();
+      },
+      fail: () => {
+        this.deleting = false;
+        this.requestUpdate();
+      },
+    };
+    this.dispatchEvent(new CustomEvent<CircuitDeleteRequestDetail>(
+      "circuit-delete-request",
+      { detail, bubbles:true, composed:true }
+    ));
   }
 
   render() {
@@ -311,7 +379,14 @@ export class CircuitSettingsModal extends LitElement {
           ${this.renderEntityStatus()}
 
           <div class="actions">
-            <ic-button @click=${this.close}>Cancel</ic-button>
+            ${this.mode === "edit" ? html`
+              <ic-button class="delete-action" variant="destructive"
+                @click=${this.deleteCircuit}
+                .disabled=${this.saving || this.deleting}>
+                ${this.deleting ? "Deleting…" : "Delete"}
+              </ic-button>
+            ` : null}
+            <ic-button @click=${this.close} .disabled=${this.deleting}>Cancel</ic-button>
             <ic-button variant="primary" @click=${this.save}
               .disabled=${!this.canSave} .loading=${this.saving}>
               ${this.mode === "create" ? "Add Circuit" : "Save"}

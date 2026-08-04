@@ -34,8 +34,33 @@ function colorWithAlpha(color: string, alpha: number): string {
 }
 
 function resolveCssColor(styles: CSSStyleDeclaration, color: string): string {
-  const token = /^var\((--[^,)]+)(?:,[^)]+)?\)$/.exec(color.trim())?.[1];
-  return token ? styles.getPropertyValue(token).trim() || color : color;
+  let resolved = color.trim();
+
+  // CanvasRenderingContext2D does not resolve CSS custom properties. Trend
+  // palette tokens intentionally reference the shared brand tokens, so walk
+  // the complete var() chain before assigning strokeStyle/fillStyle.
+  for (let depth = 0; depth < 8; depth += 1) {
+    let changed = false;
+    const next = resolved.replace(
+      /var\((--[^,)\s]+)(?:,\s*([^)]+))?\)/g,
+      (match, token: string, fallback?: string) => {
+        const value = styles.getPropertyValue(token).trim();
+        if (value) {
+          changed = true;
+          return value;
+        }
+        if (fallback?.trim()) {
+          changed = true;
+          return fallback.trim();
+        }
+        return match;
+      }
+    );
+    resolved = next.trim();
+    if (!changed) break;
+  }
+
+  return resolved;
 }
 
 function traceCurve(

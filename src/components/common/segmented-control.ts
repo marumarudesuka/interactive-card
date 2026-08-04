@@ -26,12 +26,13 @@ export class IcSegmentedControl extends LitElement {
 
   static styles = css`
     :host { display:inline-flex; width:fit-content; max-width:100%; min-width:0; }
-    :host([width="full"]) { display:block; width:100%; }
+    :host([width="full"]) { display:block; width:100%; max-width:100%; }
     .control {
       position:relative;
       display:inline-flex;
       width:max-content;
       max-width:100%;
+      min-width:0;
       min-height:var(--segment-height,var(--en-control-height-compact,38px));
       box-sizing:border-box;
       gap:3px;
@@ -55,16 +56,19 @@ export class IcSegmentedControl extends LitElement {
       bottom:4px;
       left:4px;
       width:var(--segment-active-width,40px);
+      border:1px solid color-mix(in srgb, var(--en-color-primary) 68%, transparent);
       border-radius:var(--en-control-radius,var(--en-segmented-radius,999px));
       background:var(--en-control-active-background,var(--en-color-primary));
-      box-shadow:0 0 14px var(--en-color-primary-glow);
+      box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--en-color-primary) 24%, transparent),
+        0 0 14px var(--en-color-primary-glow);
       transform:translateX(var(--segment-active-offset,0px));
       transition:transform var(--en-motion-normal,300ms) var(--en-easing-standard,ease);
       pointer-events:none;
     }
     button {
       position:relative;
-      z-index:1;
+      z-index:2;
       box-sizing:border-box;
       flex:0 0 auto;
       min-width:0;
@@ -76,6 +80,7 @@ export class IcSegmentedControl extends LitElement {
       cursor:pointer;
       font:inherit;
       font-size:var(--segment-font-size,13px);
+      white-space:nowrap;
     }
     button:hover { background:var(--ic-action-hover-background,rgba(127,127,127,.14)); }
     button.active { background:transparent; color:var(--en-control-active-foreground,#fff); font-weight:600; }

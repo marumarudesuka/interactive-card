@@ -35,6 +35,8 @@ export function normalizeKpiCardDraft(
     autoScale: draft.autoScale ?? true,
     decimals: normalizeDecimals(draft.decimals),
     order: draft.order,
+    subtitle: (draft.subtitle ?? draft.trend)?.trim() ?? "",
+    trendMode: draft.trendMode ?? "none",
   };
 }
 
@@ -69,9 +71,9 @@ export function validateKpiCardDraft(
   if (
     !Number.isInteger(draft.decimals) ||
     draft.decimals < 0 ||
-    draft.decimals > 6
+    draft.decimals > 4
   ) {
-    errors.decimals = "Decimals must be an integer from 0 to 6";
+    errors.decimals = "Decimals must be an integer from 0 to 4";
   }
 
   return {
@@ -129,6 +131,8 @@ export function buildCustomKpiConfig(
     autoScale: draft.autoScale,
     decimals: draft.decimals,
     order: draft.order,
+    subtitle: draft.subtitle || "",
+    trendMode: draft.trendMode ?? "none",
   };
 
   if (draft.category) config.category = draft.category;

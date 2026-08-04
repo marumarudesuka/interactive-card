@@ -6,16 +6,14 @@ import { kpiStyle } from "../styles/kpi";
 import { dialogContentStyle } from "../design-system/dialog";
 
 import {
-  getNumber,
-  getAttribute,
-  getEntity
-} from "../helpers/entity";
-import { parseNumericEntityState } from "../helpers/entity-state-parser";
-import { formatValue } from "../helpers/value-formatter";
-import {
   createLinePath,
   createPolylinePoints,
 } from "../helpers/line-chart";
+import {
+  resolveKpiMetricViewModel,
+  resolveKpiSparklineData,
+  resolveKpiTrendViewModel,
+} from "../helpers/kpi-card-resolver";
 import { normalizeKpiCardConfig } from "../config/config-normalizer";
 import type { KpiCardConfig } from "../config/config.types";
 import type { ConfigValidationResult } from "../config/config-validation";
@@ -53,94 +51,11 @@ export class EnergyKpiCard extends LitElement {
   }
 
   getEnergyValue() {
-    if (!this._hass || !this.config?.entity) {
-      return null;
-    }
-
-    const state = parseNumericEntityState(this._hass, this.config.entity);
-    if (state.status !== "valid" || state.value === null) {
-      console.error(`[KPI] Entity not found: ${this.config.entity}`);
-      return null;
-    }
-
-    const formatted = formatValue(
-      state.value,
-      state.unit || this.config.unit || "",
-      {
-      autoScale: this.config.autoScale ?? true,
-      decimals: this.config.decimals ?? this.config.precision ?? 2,
-      }
-    );
-    return {
-      ...formatted,
-      status: state.status,
-      rawValue: state.value,
-    };
-  }
-
-  private getDefaultSecondaryText(): string {
-    const id = this.config.id?.toLowerCase() ?? "";
-    const title = this.config.title?.toLowerCase() ?? "";
-    const unit = this.config.unit?.toLowerCase() ?? "";
-
-    if (
-      id.includes("power") ||
-      title.includes("power") ||
-      id.includes("solar") ||
-      title.includes("solar") ||
-      unit === "w" ||
-      unit === "kw"
-    ) {
-      return "Live";
-    }
-    if (id.includes("total") || title.includes("total")) return "Total";
-    if (
-      id.includes("today") ||
-      id === "usage" ||
-      title.includes("today") ||
-      this.config.category === "cost"
-    ) {
-      return "Today";
-    }
-    return this.config.category === "energy" ? "Total" : "Live";
-  }
-
-  private isComparisonKpi(): boolean {
-    const id = this.config.id?.toLowerCase() ?? "";
-    const title = this.config.title?.toLowerCase() ?? "";
-    return this.config.category === "cost" ||
-      id === "usage" ||
-      id.includes("today") ||
-      id.includes("daily") ||
-      id.includes("consumption") ||
-      title.includes("today") ||
-      title.includes("daily") ||
-      title.includes("consumption") ||
-      title.includes("cost");
+    return resolveKpiMetricViewModel(this._hass, this.config);
   }
 
   getTrend() {
-    const secondaryText = this.getDefaultSecondaryText();
-    const comparisonKpi = this.isComparisonKpi();
-    if (!this._hass || !this.config?.entity) {
-      return { text: this.config.trend ?? secondaryText, color: "var(--secondary-text-color)" };
-    }
-    const entity = getEntity(this._hass, this.config.entity);
-    if (!entity) return { text: this.config.trend ?? secondaryText, color: "var(--secondary-text-color)" };
-    const today = Number(entity.state);
-    const yesterday = Number(getAttribute(this._hass, this.config.entity, "last_period"));
-    if (!comparisonKpi || !yesterday || isNaN(yesterday)) {
-      return { text: this.config.trend ?? secondaryText, color: "var(--secondary-text-color)" };
-    }
-    const change = ((today - yesterday) / yesterday) * 100;
-    const value = Math.abs(change).toFixed(1);
-    if (change > 0) {
-      return { text: `↑ ${value}% vs yesterday`, color: "#FF3B30" };
-    }
-    if (change < 0) {
-      return { text: `↓ ${value}% vs yesterday`, color: "var(--en-color-success)" };
-    }
-    return { text: secondaryText, color: "var(--secondary-text-color)" };
+    return resolveKpiTrendViewModel(this._hass, this.config);
   }
 
   static styles = [kpiStyle, css`
@@ -155,9 +70,9 @@ export class EnergyKpiCard extends LitElement {
       --energy-card-height: var(--kpi-card-height, 170px);
       --energy-card-padding:
         var(--kpi-padding,24px)
-        var(--en-kpi-content-end-inset,9px)
+        var(--en-kpi-content-end-inset,4.5px)
         var(--kpi-padding,24px)
-        var(--en-kpi-content-start-inset,4.5px);
+        var(--en-kpi-content-start-inset,1.125px);
     }
 
     ic-card-container.preview {
@@ -249,19 +164,7 @@ export class EnergyKpiCard extends LitElement {
   }
 
   private getSparklineData(): number[] {
-    // Prefer explicit history in config (array of numbers)
-    if (Array.isArray(this.config?.history) && this.config.history.length) {
-      return this.config.history.map((v: any) => Number(v)).filter((n: number) => !isNaN(n));
-    }
-
-    // Fallback to today vs yesterday using existing attributes
-    if (!this._hass || !this.config?.entity) return [];
-    const today = Number(getNumber(this._hass, this.config.entity));
-    const yesterday = Number(getAttribute(this._hass, this.config.entity, "last_period"));
-    const arr: number[] = [];
-    if (!isNaN(yesterday)) arr.push(yesterday);
-    if (!isNaN(today)) arr.push(today);
-    return arr;
+    return resolveKpiSparklineData(this._hass, this.config);
   }
 
   private _toggleChart(e?: Event) {
@@ -303,6 +206,16 @@ export class EnergyKpiCard extends LitElement {
 
   private _openSettings(e?: Event){
     if(e) e.stopPropagation();
+
+    if (this.config?.type === "custom" && this.config?.id) {
+      this.dispatchEvent(new CustomEvent('edit-custom-kpi', {
+        detail: this.config,
+        bubbles: true,
+        composed: true,
+      }));
+      return;
+    }
+
     // notify parent that card settings opened
     this.dispatchEvent(new CustomEvent('open-card-settings', { detail: { id: this.config?.id || this.config?.entity || this.config?.title }, bubbles: true, composed: true }));
     this._settingsError = "";
@@ -340,6 +253,30 @@ export class EnergyKpiCard extends LitElement {
     this.requestUpdate();
   }
 
+  private _saveCardSettings(detail: { subtitle: string; trendMode: string }) {
+    this.dispatchEvent(new CustomEvent('update-kpi-card-settings', {
+      detail: {
+        key: this.config?.id || this.config?.entity || this.config?.title,
+        subtitle: detail.subtitle ?? "",
+        trendMode: detail.trendMode ?? "none",
+      },
+      bubbles: true,
+      composed: true,
+    }));
+    this._settingsOpen = false;
+    this.requestUpdate();
+  }
+
+  private _deleteCard(id: string) {
+    if (!id || id !== this.config.id) return;
+    this.dispatchEvent(new CustomEvent('delete-kpi-card', {
+      detail: { id },
+      bubbles: true,
+      composed: true,
+    }));
+    this._closeSettings();
+  }
+
   renderSingle(cardConfig: KpiCardConfig = this.config) {
     const oldConfig = this.config;
     this.config = cardConfig;
@@ -369,17 +306,25 @@ export class EnergyKpiCard extends LitElement {
               .unit=${metric?.unit ?? (this.config.unit ?? "")}
               .status=${metric?.status ?? "unavailable"}
             ></ic-metric-value>
+            ${metric?.statusMessage
+              ? html`<div class="config-error">${metric.statusMessage}</div>`
+              : html``}
             ${this.validation.status === "invalid"
               ? html`<div class="config-error">${this.validation.reason}</div>`
               : html``}
             ${this.previewMode
               ? null
+              : trend.text
+                ? html`
+                  <ic-trend-indicator
+                    .text=${trend.text}
+                    .status=${trendStatus}
+                  ></ic-trend-indicator>
+                `
+                : null}
+            ${this.previewMode
+              ? null
               : html`
-                <ic-trend-indicator
-                  .text=${trend.text}
-                  .status=${trendStatus}
-                ></ic-trend-indicator>
-
                 <div
                   class="sparkline"
                   style="margin-top:8px"
@@ -410,9 +355,13 @@ export class EnergyKpiCard extends LitElement {
 
       ${this.previewMode ? null : html`<ic-card-settings-dialog
         .open=${this._settingsOpen}
-        .title=${"Change Entity"}
+        .title=${"KPI Settings"}
         .hass=${this._hass}
         .entity=${this.config.entity ?? ""}
+        .subtitle=${this.config.subtitle ?? this.config.trend ?? ""}
+        .trendMode=${this.config.trendMode ?? "none"}
+        .cardId=${this.config.id ?? ""}
+        .canDelete=${Boolean(this.config.id)}
         .error=${this._settingsError}
         .entityFilter=${{
           domains: ["sensor", "number", "input_number"],
@@ -420,6 +369,12 @@ export class EnergyKpiCard extends LitElement {
         @settings-close=${()=>this._closeSettings()}
         @entity-selected=${(event: CustomEvent<{ entityId: string }>) =>
           this._selectEntityForCard(event.detail.entityId)}
+        @settings-save=${(event: CustomEvent<{ subtitle: string; trendMode: string }>) => {
+          this._saveCardSettings(event.detail);
+        }}
+        @settings-delete=${(event: CustomEvent<{ id: string }>) => {
+          this._deleteCard(event.detail.id);
+        }}
       ></ic-card-settings-dialog>`}
     `;    this.config = oldConfig;
     return result;
@@ -440,4 +395,3 @@ customElements.define("energy-kpi-card", EnergyKpiCard);
 (window as any).customCards = [...(window as any).customCards || [], { type: "energy-kpi-card", name: "Energy KPI Card", description: "Glass style energy KPI card" }];
 
 console.log("Energy KPI Card Loaded v2");
-

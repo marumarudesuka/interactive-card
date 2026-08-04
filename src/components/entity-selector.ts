@@ -210,6 +210,9 @@ export class EntitySelector extends LitElement {
         const stateClass = state?.attributes.state_class;
 
         if (domains.length && !domains.includes(domain)) return false;
+        if (this.filter.predicate && !this.filter.predicate(entityId)) {
+          return false;
+        }
         if (
           deviceClasses.length &&
           (!deviceClass || !deviceClasses.includes(deviceClass))

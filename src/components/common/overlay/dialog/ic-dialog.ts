@@ -62,11 +62,13 @@ export class IcDialog extends LitElement {
       position:absolute;
       left:50%;
       top:50%;
-      width:min(calc(100vw - 40px),var(--dialog-width,var(--app-dialog-width,520px)));
-      max-height:calc(100vh - 40px);
+      display:flex;
+      flex-direction:column;
+      width:min(calc(100vw - 24px),var(--dialog-width,var(--app-dialog-width,520px)));
+      max-width:calc(100vw - 24px);
+      max-height:calc(100dvh - 24px);
       box-sizing:border-box;
-      overflow-x:var(--dialog-overflow-x,auto);
-      overflow-y:var(--dialog-overflow-y,auto);
+      overflow:hidden;
       border:var(--ic-border-dialog,var(--ic-dialog-border,var(--en-border)));
       border-radius:var(--dialog-radius,var(--ic-radius-dialog));
       background:var(--ic-dialog-background,var(--en-surface-primary,var(--ic-card-background,rgba(255,255,255,.12))));
@@ -87,7 +89,7 @@ export class IcDialog extends LitElement {
       display:flex;
       align-items:center;
       justify-content:var(--dialog-header-justify,space-between);
-      gap:var(--dialog-header-gap,0);
+      gap:var(--dialog-header-gap,8px);
       min-height:var(--dialog-header-min-height,77px);
       box-sizing:border-box;
       padding:var(--dialog-header-padding,var(--app-dialog-header-padding,24px 32px));
@@ -97,6 +99,7 @@ export class IcDialog extends LitElement {
       font-weight:var(--en-title-lg-weight,600);
       line-height:var(--en-title-lg-line-height,1.2);
       letter-spacing:var(--en-title-lg-letter-spacing,-0.3px);
+      flex:0 0 auto;
     }
     .close {
       order:var(--dialog-close-order,0);
@@ -114,8 +117,47 @@ export class IcDialog extends LitElement {
       outline:var(--ic-focus-ring);
       outline-offset:2px;
     }
-    .body { padding:var(--dialog-body-padding,var(--app-dialog-body-padding,0)); }
+    .body {
+      flex:1 1 auto;
+      min-height:0;
+      overflow-y:auto;
+      overflow-x:hidden;
+      padding:var(--dialog-body-padding,var(--app-dialog-body-padding,0));
+    }
+    footer {
+      flex:0 0 auto;
+      display:block;
+      width:100%;
+      min-width:0;
+      box-sizing:border-box;
+    }
+    footer > slot[name="footer"] {
+      display:block;
+      width:100%;
+      min-width:0;
+      box-sizing:border-box;
+    }
+    footer > slot[name="footer"]::slotted(*) {
+      display:block;
+      width:100%;
+      min-width:0;
+      box-sizing:border-box;
+    }
     footer:empty { display:none; }
+
+    @media (max-width: 719px) {
+      header {
+        min-height: 64px;
+        padding: 16px;
+        font-size: var(--en-title-md-size, 20px);
+      }
+
+      .close {
+        width: 36px;
+        height: 36px;
+        flex-basis: 36px;
+      }
+    }
   `];
 
   protected updated(changed: PropertyValues<this>) {

@@ -256,9 +256,15 @@ export class EnergyCircuitSection extends LitElement {
       --circuit-card-height: 150px;
     }
 
+    @container (max-width: 1200px) {
+      .carousel-shell.static-grid .track {
+        --static-circuit-columns: 3;
+      }
+    }
+
     @container (max-width: 599px) {
       .carousel-shell.static-grid .track {
-        --static-circuit-columns: 2;
+        --static-circuit-columns: 1;
       }
       .track {
         --circuit-grid-gap: 10px;
@@ -270,7 +276,7 @@ export class EnergyCircuitSection extends LitElement {
   protected firstUpdated() {
     this.resizeObserver = new ResizeObserver((entries) => {
       const width = entries[0]?.contentRect.width ?? 0;
-      const nextVisibleCount = width > 1200 ? 4 : 2;
+      const nextVisibleCount = width > 1200 ? 4 : width > 599 ? 3 : 1;
       const gap = width <= 599 ? 10 : 16;
       const cardWidth =
         (width - gap * (nextVisibleCount - 1)) /
@@ -471,24 +477,28 @@ export class EnergyCircuitSection extends LitElement {
   private async handleCircuitDeleteRequest(
     event: CustomEvent<CircuitDeleteRequestDetail>
   ) {
-    const circuitId = event.detail.circuitId;
-    this.baseCircuits = this.baseCircuits.filter(
-      (circuit) => circuit.id !== circuitId
-    );
-    const circuits = await this.coordinator.remove(
-      this.baseCircuits,
-      circuitId
-    );
-    this.resolvedCircuits = circuits;
-    this.config = { ...this.config, circuits };
-    this.requestUpdate();
-    await this.updateComplete;
-    this.syncNavigationState();
-    this.dispatchEvent(new CustomEvent("config-changed", {
-      detail: { config: this.config },
-      bubbles: true,
-      composed: true,
-    }));
+    try {
+      const circuitId = event.detail.circuitId;
+      const circuits = await this.coordinator.remove(
+        this.baseCircuits,
+        circuitId
+      );
+      this.baseCircuits = circuits;
+      this.resolvedCircuits = circuits;
+      this.config = { ...this.config, circuits };
+      this.requestUpdate();
+      await this.updateComplete;
+      this.syncNavigationState();
+      event.detail.complete?.();
+      this.dispatchEvent(new CustomEvent("config-changed", {
+        detail: { config: this.config },
+        bubbles: true,
+        composed: true,
+      }));
+    } catch (error) {
+      event.detail.fail?.();
+      console.error("[energy-circuit-section] Unable to delete circuit", error);
+    }
   }
 
   render() {
@@ -501,8 +511,8 @@ export class EnergyCircuitSection extends LitElement {
       Math.max(0, circuits.length + 1 - this.visibleCount)
     );
     const itemCount = circuits.length + 1;
-    const usesCarousel = itemCount > 4;
-    const staticColumns = Math.min(itemCount, 4);
+    const usesCarousel = itemCount > this.visibleCount;
+    const staticColumns = Math.min(itemCount, this.visibleCount);
     return html`
       <ic-section-header
         .title=${this.config.title ?? "Active Circuits"}
