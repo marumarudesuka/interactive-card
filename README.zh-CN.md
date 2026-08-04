@@ -2,240 +2,298 @@
 
 [English](./README.md) | 简体中文
 
-Interactive Card 是一个面向 Home Assistant Lovelace 的自定义卡片库，专注于构建现代化、可配置的能源监控看板。
+Interactive Card 是一组面向 Home Assistant 能源面板的 Lovelace 自定义卡片。
 
-这个项目最初只是我为自己的 Home Assistant 能源看板开发的几张可复用卡片。随着功能不断增加，逐渐整理成了一个包含 KPI、趋势图和回路监控等组件的卡片库，希望能够让能源 Dashboard 的搭建更加简单，同时保持一致的视觉风格和良好的可配置性。
-
-<p align="center">
-  <img src="./docs/dashboard_overview.png" alt="Interactive Card Dashboard" width="100%">
-</p>
-
----
-
-# 功能
-
-目前项目主要围绕三个核心模块展开。
-
-## KPI
-
-用于展示用电量、实时功率、电费等关键指标，并支持灵活配置。
-
-支持：
-
-- 自定义实体
-- 自定义标题
-- 自定义图标
-- 自定义单位
-- 小数位设置
-- Subtitle 显示方式
-- 自动单位缩放（W / kW、Wh / kWh）
-- 本地保存配置
+这个项目最初用于整理个人面板里的几个可复用卡片，后来逐步扩展为一套小型组件库，覆盖 KPI 数据、历史趋势和回路功率监控。各卡片使用同一套视觉设计，也可以按不同 Home Assistant 实体进行配置。
 
 <p align="center">
-  <img src="./docs/kpi_section.png" alt="KPI 管理" width="30%">
-  <img src="./docs/kpi_editor.png" alt="KPI 设置" width="62%">
+  <img
+    src="./docs/dashboard_overview.png"
+    alt="Interactive Card 能源面板总览"
+    width="100%"
+  >
 </p>
 
----
+## 功能
 
-## Trend
+Interactive Card 目前主要包含三个部分：
 
-用于展示历史趋势数据，并支持多条曲线组合显示。
+- **KPI** — 展示能耗、功率、费用等关键数值
+- **Trend** — 使用可配置的多条数据序列查看历史趋势
+- **Circuit** — 实时查看各回路的功率状态
 
-支持：
+当前已经实现的功能包括：
 
-- 多实体趋势
-- Line / Area / Bar 三种模式
-- 左右双坐标轴
-- 时间范围切换
-- 小数位设置
-- 数据分辨率配置
-- 每条曲线独立配置
+- 可配置的实体选择
+- 自定义标题、图标、单位、小数位和 KPI 副标题
+- 功率与电量单位自动缩放
+- 多条 Trend Series，以及 Line、Area、Bar 三种显示模式
+- 自动、左侧和右侧趋势轴
+- 可配置的趋势分辨率、时间范围和图表高度
+- 自定义回路名称、实时功率传感器和设备图标
+- 面板编辑结果保存在浏览器本地
+- Glass、Native、Solid 三种卡片样式
+- KPI 与回路卡片的响应式布局
+
+## 界面截图
+
+### KPI
+
+可以直接在面板中添加、移除和配置 KPI 卡片。
 
 <p align="center">
-  <img src="./docs/trend_card.png" alt="趋势图" width="100%">
+  <img
+    src="./docs/kpi_section.png"
+    alt="KPI 卡片管理菜单"
+    width="30%"
+  >
+  <img
+    src="./docs/kpi_editor.png"
+    alt="KPI 卡片设置窗口"
+    width="62%"
+  >
 </p>
+
+### Trend
+
+趋势卡片支持多条 Series、混合图表模式、左右双轴，以及四种时间范围。
 
 <p align="center">
-  <img src="./docs/trend_settings.png" alt="趋势图设置" width="46%">
-  <img src="./docs/edit-series.png" alt="趋势序列设置" width="46%">
+  <img
+    src="./docs/trend_card.png"
+    alt="包含多条数据序列的能源趋势图"
+    width="100%"
+  >
 </p>
 
----
-
-## Circuit
-
-用于监控各个回路的实时功率，并支持自定义名称、图标和对应实体。
-
-支持：
-
-- 回路重命名
-- 选择功率实体
-- 内置图标选择器
-- 实时状态显示
-- 当前功率显示
+每条 Series 都可以单独设置显示名称、单位、图表模式、坐标轴、小数位和数据分辨率。
 
 <p align="center">
-  <img src="./docs/circuit_section.png" alt="回路编辑器" width="46%">
+  <img
+    src="./docs/trend_settings.png"
+    alt="Trend 卡片设置"
+    width="46%"
+  >
+  <img
+    src="./docs/edit_series.png"
+    alt="Trend Series 编辑界面"
+    width="46%"
+  >
 </p>
 
----
+### Circuit
 
-# 已提供的卡片
+回路条目可以修改名称、绑定实时功率传感器，并设置设备图标。
+
+<p align="center">
+  <img
+    src="./docs/circuit_section.png"
+    alt="回路配置编辑窗口"
+    width="46%"
+  >
+</p>
+
+## 可用卡片
+
+当前构建包会向 Lovelace 注册以下卡片类型：
 
 | 卡片 | 说明 |
-|------|------|
-| `custom:energy-kpi-card` | 单个 KPI 卡片 |
-| `custom:energy-kpi-section` | KPI 卡片组合 |
-| `custom:energy-trend-card` | 能源趋势图 |
-| `custom:energy-circuit-section` | 回路监控卡片 |
+|---|---|
+| `custom:energy-kpi-card` | 展示一个可配置的 KPI 数值 |
+| `custom:energy-kpi-section` | 管理并展示一组 KPI 卡片 |
+| `custom:energy-trend-card` | 展示可配置的历史数据 Series |
+| `custom:energy-circuit-section` | 展示回路级实时功率信息 |
+| `custom:energy-flow-diagram` | 展示配置好的能源节点与流向连接 |
+| `custom:energy-theme-selector` | 切换 Glass、Native、Solid 卡片样式 |
+| `custom:energy-settings-card` | 提供卡片样式设置界面 |
+| `custom:energy-ev-charging-scene` | 展示项目内置的电动车充电场景 |
+| `custom:energy-solar-scene` | 展示项目内置的光伏场景 |
+| `custom:energy-battery-scene` | 展示项目内置的储能场景 |
 
----
+## 安装
 
-# 安装
+### 手动安装
 
-## 手动安装
+仓库当前没有 HACS 元数据，因此需要手动安装。
 
-### 1. 构建项目
+1. 从最新 GitHub Release 下载 `interactive-card.js`，或自行从源码构建。
+2. 将文件复制到：
 
-```bash
-npm install
-npm run build
+   ```text
+   /config/www/interactive-card/interactive-card.js
+   ```
+
+3. 在 Home Assistant 中打开**设置 → 仪表盘 → 资源**。
+4. 添加 `/local/interactive-card/interactive-card.js`，资源类型选择 **JavaScript 模块**。
+5. 重新加载仪表盘。如果仍然加载旧版本，可以更新资源 URL 的查询参数或清理浏览器缓存。
+
+## 快速开始
+
+在仪表盘中添加一张 KPI 卡片：
+
+```yaml
+type: custom:energy-kpi-card
+entity: sensor.home_power
+title: Current Power
+icon: mdi:flash
+unit: W
+decimals: 2
+autoScale: true
 ```
 
-### 2. 将生成的 JavaScript 文件复制到 Home Assistant
+请将示例实体替换为你的 Home Assistant 中实际存在的实体。
 
-复制到：
+## 配置示例
 
-```text
-/config/www/interactive-card/
-```
-
-例如：
-
-```text
-/config/www/interactive-card/interactive-card.js
-```
-
-### 3. 打开 Home Assistant
-
-```
-设置（Settings）
-→ 仪表盘（Dashboards）
-→ 资源（Resources）
-```
-
-### 4. 添加资源
-
-URL：
-
-```
-/local/interactive-card/interactive-card.js
-```
-
-类型：
-
-```
-JavaScript Module
-```
-
-### 5. 保存后刷新浏览器（Ctrl + F5）
-
----
-
-# 快速开始
-
-下面是一个简单的 KPI Section 示例：
+### KPI 区域
 
 ```yaml
 type: custom:energy-kpi-section
 title: Energy Overview
-
 cards:
-  - entity: sensor.today_energy
-    title: Today's Usage
-    unit: kWh
-    icon: mdi:lightning-bolt
-
-  - entity: sensor.current_power
+  - id: current-power
+    entity: sensor.home_power
     title: Current Power
-    unit: W
     icon: mdi:flash
+    unit: W
+    decimals: 2
+    autoScale: true
+    enabled: true
+    order: 0
+
+  - id: today-energy
+    entity: sensor.home_energy_today
+    title: Today's Usage
+    icon: mdi:lightning-bolt
+    unit: kWh
+    decimals: 2
+    subtitle: Since 00:00
+    trendMode: vs_yesterday
+    enabled: true
+    order: 1
 ```
 
----
+KPI 配置还支持项目类型中定义的自定义图标颜色和历史值。从卡片管理菜单做出的修改会保存在当前浏览器中。
 
-# 开发
+### Trend 卡片
 
-克隆项目：
+```yaml
+type: custom:energy-trend-card
+id: main-energy-trend
+title: Energy Trend
+height: 350
+fullWidth: true
+timeframe: 24H
+category: power
+entities:
+  - entity: sensor.home_power
+    name: Main Power
+    unit: W
+    chartMode: line
+    axis: left
+    decimals: 2
+    renderMode: smooth
+    enabled: true
+    order: 0
 
-```bash
-git clone https://github.com/YOUR_USERNAME/interactive-card.git
-cd interactive-card
+  - entity: sensor.solar_power
+    name: Solar Generation
+    unit: W
+    chartMode: area
+    axis: auto
+    decimals: 2
+    renderMode: high_precision
+    enabled: true
+    order: 1
+
+  - entity: sensor.electricity_price
+    name: Electricity Rate
+    unit: EUR/kWh
+    category: cost
+    chartMode: bar
+    axis: right
+    decimals: 4
+    enabled: true
+    order: 2
 ```
 
-安装依赖：
+时间范围支持 `1H`、`24H`、`7D` 和 `30D`。每条 Series 可以使用 `line`、`area` 或 `bar`，坐标轴可以设置为 `auto`、`left` 或 `right`。
+
+### Active Circuits
+
+```yaml
+type: custom:energy-circuit-section
+title: Active Circuits
+circuits:
+  - id: kitchen
+    name: Kitchen
+    entity: sensor.kitchen_power
+    icon: mdi:stove
+    enabled: true
+    order: 0
+
+  - id: hvac
+    name: HVAC
+    entity: sensor.hvac_power
+    icon: mdi:air-conditioner
+    enabled: true
+    order: 1
+```
+
+Circuit 编辑器只接受单位为 `W`、`kW` 或 `MW` 的实时功率传感器。已经存在但不符合要求的绑定仍会显示，方便用户识别和修正；在选择有效功率实体之前无法再次保存。
+
+## 开发
+
+安装依赖并启动 Vite 开发服务器：
 
 ```bash
 npm install
-```
-
-启动开发环境：
-
-```bash
 npm run dev
 ```
 
-构建发布版本：
+项目当前提供以下命令：
 
-```bash
-npm run build
-```
+| 命令 | 用途 |
+|---|---|
+| `npm run dev` | 启动 Vite 开发服务器 |
+| `npm run typecheck` | 运行 TypeScript 检查，不生成文件 |
+| `npm run verify` | 运行核心验证脚本 |
+| `npm run check` | 依次运行类型检查、核心验证和生产构建 |
+| `npm run build` | 构建 `dist/interactive-card.js` |
+| `npm run preview` | 使用 Vite 预览生产构建 |
 
----
-
-# 项目结构
+## 项目结构
 
 ```text
 src/
-├── components/
-├── config/
-├── data/
-├── helpers/
-├── styles/
-├── types/
-└── index.ts
+├── components/       Lovelace 卡片和共享 UI 组件
+├── config/           配置标准化与卡片注册表
+├── data/             默认 KPI、回路和场景数据
+├── design-system/    共享视觉 Token 与 Dialog 样式
+├── helpers/          格式化、实体、图表与布局逻辑
+├── repositories/     浏览器本地配置持久化
+├── styles/           共享卡片样式与响应式布局
+├── theme/            卡片材质与主题处理
+├── types/            TypeScript 配置和视图模型类型
+└── index.ts          构建入口
+
+docs/                 截图与架构说明
+scripts/              项目验证脚本
+dist/                 生成的生产构建
 ```
 
----
+内部运行流程的简要说明见 [docs/architecture.md](./docs/architecture.md)。
 
-# 后续计划
+## 路线图
 
-- 优化 Home Assistant 可视化编辑体验
-- 增加更多 Dashboard 布局
-- 支持 Solar / Battery 卡片
-- 集成更多自动化能力
-- 支持 HACS 安装
-- 增加更多主题样式
+项目目前没有正式的版本路线图。近期工作主要是增加不同 Home Assistant 配置下的实际测试、保持已保存配置的兼容性，并准备未来发布到 HACS 所需的仓库元数据。
 
----
+## 参与贡献
 
-# 参与贡献
+欢迎提交问题和范围明确的 Pull Request。提交前请：
 
-欢迎提交 Issue 或 Pull Request。
+1. 使用 `npm install` 安装依赖。
+2. 在单独分支中完成修改。
+3. 运行 `npm run check`。
+4. 如果修改涉及界面或实体逻辑，请说明用于验证的 Home Assistant 配置。
 
-如果遇到 Bug，建议同时提供：
-
-- Home Assistant 版本
-- 浏览器
-- 卡片配置
-- 控制台错误信息
-- 截图
-
-这样更方便定位问题。
-
----
-
-# License
-
-MIT License.

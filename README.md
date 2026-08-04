@@ -45,12 +45,12 @@ KPI cards can be added, removed, and configured directly from the dashboard.
   <img
     src="./docs/kpi_section.png"
     alt="KPI card management panel"
-    width="35%"
+    width="30%"
   >
   <img
     src="./docs/kpi_editor.png"
     alt="KPI card settings"
-    width="35%"
+    width="62%"
   >
 </p>
 
@@ -72,12 +72,12 @@ Each trend series can be configured independently, including its display name, u
   <img
     src="./docs/trend_settings.png"
     alt="Trend card settings"
-    width="42%"
+    width="46%"
   >
   <img
-    src="./docs/edit-series.png"
+    src="./docs/edit_series.png"
     alt="Trend series editor"
-    width="42%"
+    width="46%"
   >
 </p>
 
@@ -296,4 +296,3 @@ Issues and focused pull requests are welcome. Before opening a pull request:
 2. Make the change in a dedicated branch.
 3. Run `npm run check`.
 4. Describe the Home Assistant configuration used to verify UI or entity-related changes.
-
