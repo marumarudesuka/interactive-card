@@ -343,8 +343,8 @@ export class TrendChart extends LitElement {
           id: `${axis.id}:${tick.value}`,
           text: formatTrendAxisValue(tick.value, axis),
           x: isLeft
-            ? plot.left - 8
-            : plot.right + 8,
+            ? plot.left - 18
+            : plot.right + 18,
           y: getTrendY(tick.value, axis, plot),
           align: isLeft ? "right" : "left",
         }));

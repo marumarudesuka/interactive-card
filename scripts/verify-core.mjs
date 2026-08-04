@@ -2,6 +2,10 @@ import {
   createLinePath,
   createPolylinePoints,
 } from "../src/helpers/line-chart.ts";
+import {
+  resolveKpiMetricViewModel,
+  resolveKpiTrendViewModel,
+} from "../src/helpers/kpi-card-resolver.ts";
 import { formatNumber } from "../src/helpers/number-formatter.ts";
 import { formatValue } from "../src/helpers/value-formatter.ts";
 import {
@@ -63,9 +67,46 @@ import {
 } from "../src/helpers/trend-chart-formatters.ts";
 import { createMonotoneCurve } from "../src/helpers/trend-curve.ts";
 import { sortCircuitsByPower } from "../src/helpers/circuit-utils.ts";
+import {
+  isRealTimePowerEntity,
+  normalizePowerUnit,
+} from "../src/helpers/power-entity.ts";
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
+}
+
+function verifyCircuitPowerEntityFilter() {
+  const state = (deviceClass, unit) => ({
+    attributes: {
+      device_class: deviceClass,
+      unit_of_measurement: unit,
+    },
+  });
+  assert(
+    isRealTimePowerEntity("sensor.main_power", state("power", "W")) &&
+      isRealTimePowerEntity("sensor.third_party", state(undefined, " kW ")) &&
+      isRealTimePowerEntity("sensor.large_load", state(undefined, "mw")),
+    "circuit selector accepts real-time power sensors"
+  );
+  assert(
+      !isRealTimePowerEntity("sensor.energy", state("energy", "Wh")) &&
+      !isRealTimePowerEntity("sensor.misclassified", state("power", "Wh")) &&
+      !isRealTimePowerEntity("sensor.energy_kwh", state(undefined, "kWh")) &&
+      !isRealTimePowerEntity("sensor.voltage", state("voltage", "V")) &&
+      !isRealTimePowerEntity("number.power", state("power", "W")),
+    "circuit selector rejects energy, non-power, and non-sensor entities"
+  );
+  assert(
+    normalizePowerUnit("W") === "W" &&
+      normalizePowerUnit(" KW ") === "kW" &&
+      normalizePowerUnit("MWh") === undefined,
+    "power unit normalization distinguishes W from Wh"
+  );
+  assert(
+    convertToBaseUnit(1.2, " kW ").value === 1200,
+    "circuit power comparison normalizes kW to W"
+  );
 }
 
 async function verifyTrendConfigPersistence() {
@@ -201,6 +242,41 @@ function verifyNumberAndUnitFormatting() {
     highPower.value === "2.57" && highPower.unit === "kW",
     "KPI power above threshold is formatted as kW"
   );
+}
+
+function verifyKpiResolverSemantics() {
+  const hass = {
+    states: {
+      "sensor.power": {
+        state: "unknown",
+        attributes: {
+          friendly_name: "Power",
+          unit_of_measurement: "W",
+        },
+      },
+      "sensor.energy_total": {
+        state: "10",
+        attributes: {
+          friendly_name: "Energy Total",
+          unit_of_measurement: "kWh",
+          last_period: 8,
+        },
+      },
+    },
+  };
+
+  const metric = resolveKpiMetricViewModel(hass, {
+    entity: "sensor.power",
+    unit: "W",
+  });
+  assert(metric?.status === "unknown", "resolver preserves unknown state");
+
+  const trend = resolveKpiTrendViewModel(hass, {
+    entity: "sensor.energy_total",
+    title: "Today Energy",
+    trendMode: "none",
+  });
+  assert(trend.text === "", "trend mode none disables comparison text");
 }
 
 function verifyLineChart() {
@@ -847,7 +923,7 @@ function verifyKpiCardDraft() {
   assert(invalid.errors.title === "Title required", "draft title error");
   assert(invalid.errors.entity === "Invalid entity ID", "draft entity error");
   assert(
-    invalid.errors.decimals === "Decimals must be an integer from 0 to 6",
+    invalid.errors.decimals === "Decimals must be an integer from 0 to 4",
     "draft decimals error"
   );
 
@@ -1342,8 +1418,10 @@ function verifyTrendChartAndStatistics() {
 }
 
 verifyNumberAndUnitFormatting();
+verifyKpiResolverSemantics();
 verifyLineChart();
 verifyCircuitSorting();
+verifyCircuitPowerEntityFilter();
 verifyConfigNormalization();
 verifyConfigValidation();
 verifyKpiModel();

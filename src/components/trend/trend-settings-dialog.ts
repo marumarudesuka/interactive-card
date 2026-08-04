@@ -54,16 +54,6 @@ export class TrendSettingsDialog extends LitElement {
       --ic-field-placeholder-opacity:.7;
     }
     ic-app-dialog.series-view {
-      --dialog-header-min-height:56px;
-      --dialog-header-padding:10px 24px;
-      --dialog-header-gap:8px;
-      --dialog-close-size:36px;
-      --subpage-back-size:36px;
-      --subpage-back-icon-size:18px;
-      --subpage-title-size:22px;
-      --subpage-title-weight:600;
-      --subpage-title-line-height:1.2;
-      --subpage-title-letter-spacing:-.2px;
       --ic-dialog-padding:20px 32px 24px;
     }
     .content {
@@ -107,11 +97,12 @@ export class TrendSettingsDialog extends LitElement {
     }
     .switch::after {
       content:""; width:12px; height:12px; border-radius:50%;
-      background:var(--en-text-secondary,var(--secondary-text-color));
+      background:var(--en-control-active-foreground,#fff);
+      box-shadow:0 1px 3px rgba(0,0,0,.18);
       transform:translateX(-6px); transition:transform var(--en-motion-fast,180ms);
     }
-    .switch.on { background:var(--en-color-primary-soft); }
-    .switch.on::after { background:var(--en-color-primary); transform:translateX(6px); }
+    .switch.on { background:var(--en-color-primary); }
+    .switch.on::after { transform:translateX(6px); }
     .field-grid {
       display:grid;
       grid-template-columns:1fr 1fr;
@@ -135,11 +126,12 @@ export class TrendSettingsDialog extends LitElement {
       justify-content:space-between; gap:16px;
     }
     .chart-option > span {
-      color:var(--en-text-secondary,var(--secondary-text-color));
-      font-size:12px;
-      font-weight:400;
+      color:var(--en-text-primary,var(--primary-text-color));
+      font-size:14px;
+      font-weight:500;
     }
     .footer { display:flex; justify-content:flex-end; gap:10px; padding:14px 24px; }
+    .delete-action { margin-inline-end:auto; }
   `, dialogContentStyle];
 
   protected willUpdate(changed: PropertyValues<this>) {
@@ -242,6 +234,27 @@ export class TrendSettingsDialog extends LitElement {
     }));
   }
 
+  private deleteSeries() {
+    if (this.view !== "series") return;
+    const selected = this.draft.entities[this.configuredIndex];
+    if (!selected) return;
+    this.draft = {
+      ...this.draft,
+      entities:this.draft.entities.filter(
+        (entity) => entity.entity !== selected.entity
+      ),
+    };
+    this.configuredIndex = Math.max(
+      0,
+      Math.min(this.configuredIndex, this.draft.entities.length - 1)
+    );
+    this.selectedEntity = "";
+    this.entityPickerExpanded = false;
+    this.view = "list";
+    this.requestUpdate();
+    this.emitChange();
+  }
+
   render() {
     const selected = this.draft.entities[this.configuredIndex];
     return html`
@@ -255,7 +268,7 @@ export class TrendSettingsDialog extends LitElement {
         }}>
         ${this.view === "series" ? html`
           <ic-subpage-header slot="header"
-            .title=${selected?.name?.trim() || "Series Settings"}
+            title="Edit Series"
             @subpage-back=${() => {
               this.view = "list";
               this.requestUpdate();
@@ -311,10 +324,16 @@ export class TrendSettingsDialog extends LitElement {
                   </ic-segmented-control>
                 </label>
                 <label class="wide">Axis
-                  <ic-segmented-control width="fit" label="Axis" .value=${selected.axis === "right" ? "right" : "left"}
-                    .options=${[{value:"left",label:"Left"},{value:"right",label:"Right"}]}
+                  <ic-segmented-control width="fit" label="Axis" .value=${selected.axis ?? "auto"}
+                    .options=${[
+                      {value:"auto",label:"Auto"},
+                      {value:"left",label:"Left"},
+                      {value:"right",label:"Right"},
+                    ]}
                     @segmented-change=${(event:CustomEvent<SegmentedChangeDetail>) =>
-                      this.updateEntity(this.configuredIndex, { axis:event.detail.value as "left"|"right" })}>
+                      this.updateEntity(this.configuredIndex, {
+                        axis:event.detail.value as "auto"|"left"|"right",
+                      })}>
                   </ic-segmented-control>
                 </label>
                 <label class="wide">Decimal Places
@@ -370,6 +389,10 @@ export class TrendSettingsDialog extends LitElement {
           `}
         </ic-scroll-area>
         <div class="footer" slot="footer">
+          ${this.view === "series" ? html`
+            <ic-button class="delete-action" variant="destructive"
+              @click=${this.deleteSeries}>Delete</ic-button>
+          ` : null}
           <ic-button @click=${this.close}>Cancel</ic-button>
           <ic-button variant="primary" @click=${this.save}>Save</ic-button>
         </div>

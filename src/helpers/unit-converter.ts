@@ -21,14 +21,15 @@ export function convertToBaseUnit(
   unit: string
 ): BaseUnitValue {
   const normalizedUnit = unit.trim();
+  const normalizedPowerUnit = normalizedUnit.replace(/\s+/g, "").toLowerCase();
 
-  if (normalizedUnit === "MW") {
+  if (normalizedPowerUnit === "mw") {
     return { value: value * 1_000_000, unit: "W", family: "power" };
   }
-  if (normalizedUnit === "kW") {
+  if (normalizedPowerUnit === "kw") {
     return { value: value * 1_000, unit: "W", family: "power" };
   }
-  if (normalizedUnit === "W") {
+  if (normalizedPowerUnit === "w") {
     return { value, unit: "W", family: "power" };
   }
 

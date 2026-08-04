@@ -79,8 +79,8 @@ function getTrendMenuName(
   fallback?: string
 ): string {
   return String(
-    hass?.states[entityId]?.attributes.friendly_name ??
-    fallback ??
+    fallback?.trim() ||
+    hass?.states[entityId]?.attributes.friendly_name ||
     entityId
   );
 }
@@ -103,7 +103,6 @@ export class EnergyTrendCard extends LitElement {
   private settingsMenuOpen = false;
   private seriesSearch = "";
   private settingsDialogOpen = false;
-  private seriesActionEntity = "";
   private settingsDialogEntity = "";
   private hiddenSeriesIds = new Set<string>();
   private readonly configCoordinator = new TrendConfigCoordinator(
@@ -226,25 +225,6 @@ export class EnergyTrendCard extends LitElement {
     }
 
     .series-row { min-width:0; }
-    .more {
-      display:grid; width:28px; height:28px; padding:0;
-      place-items:center; border:0;
-      border-radius:var(--en-control-radius,999px);
-      background:transparent;
-      color:var(--en-text-secondary,var(--secondary-text-color));
-      cursor:pointer;
-    }
-    .more:hover {
-      background:var(--ic-action-hover-background,rgba(127,127,127,.14));
-    }
-    .more ha-icon { width:16px; height:16px; --mdc-icon-size:16px; }
-    .series-actions {
-      display:grid; gap:var(--en-menu-item-gap,6px); margin:2px 4px 6px 20px; padding:6px;
-      border:var(--ic-border-control,var(--en-border));
-      border-radius:var(--en-panel-radius,18px);
-      background:var(--en-surface-control,transparent);
-    }
-
     ic-trend-chart {
       flex: 1;
       min-height: 0;
@@ -443,23 +423,6 @@ export class EnergyTrendCard extends LitElement {
     });
   }
 
-  private removeSeries(entityId: string) {
-    if (!this.config) return;
-    this.seriesActionEntity = "";
-    this.commitTrendConfig({
-      ...this.config,
-      entities:this.config.entities.filter((entity) => entity.entity !== entityId),
-    });
-  }
-
-  private configureSeries(entityId: string) {
-    this.seriesActionEntity = "";
-    this.settingsDialogEntity = entityId;
-    this.settingsMenuOpen = false;
-    this.settingsDialogOpen = true;
-    this.requestUpdate();
-  }
-
   private toggleSettingsMenu() {
     this.settingsMenuOpen = !this.settingsMenuOpen;
     this.requestUpdate();
@@ -501,39 +464,18 @@ export class EnergyTrendCard extends LitElement {
                   entity.entity,
                   entity.name
                 );
+                const compactDisplayName = truncateMiddle(displayName, {
+                  maxLength:ENTITY_ID_DISPLAY_LENGTH.compactMenu,
+                });
                 return html`
                 <div class="series-manager-row ${entity.enabled === false ? "hidden-series" : ""}">
                   <ic-menu-item
                     .selected=${entity.enabled !== false}
                     .indicator=${entity.enabled === false ? "none" : "check"}
-                    .displayLabel=${truncateMiddle(displayName, {
-                      maxLength:ENTITY_ID_DISPLAY_LENGTH.compactMenu,
-                    })}
                     .rawLabel=${displayName}
                     @click=${() => this.toggleSeriesVisibility(entity.entity)}>
-                    <button slot="trailing" class="more" type="button"
-                      aria-label=${`More actions for ${displayName}`}
-                      @click=${(event:Event) => {
-                        event.stopPropagation();
-                        this.seriesActionEntity = this.seriesActionEntity === entity.entity
-                          ? "" : entity.entity;
-                        this.requestUpdate();
-                      }}>
-                      <ha-icon icon="mdi:dots-horizontal"></ha-icon>
-                    </button>
+                    ${compactDisplayName}
                   </ic-menu-item>
-                  ${this.seriesActionEntity === entity.entity ? html`
-                    <div class="series-actions">
-                      <ic-menu-item indicator="none" .hideIndicator=${true}
-                        @click=${() => this.configureSeries(entity.entity)}>
-                        Configure Series
-                      </ic-menu-item>
-                      <ic-menu-item indicator="none" .hideIndicator=${true}
-                        @click=${() => this.removeSeries(entity.entity)}>
-                        Remove from Trend
-                      </ic-menu-item>
-                    </div>
-                  ` : null}
                 </div>
               `;
               }) : html`<div class="entity-item">No displayed series</div>`}
@@ -547,15 +489,16 @@ export class EnergyTrendCard extends LitElement {
                 }}></ic-search-field>
               ${availableEntities.length ? availableEntities.map((entityId) => {
                 const displayName = getTrendMenuName(this._hass, entityId);
+                const compactDisplayName = truncateMiddle(displayName, {
+                  maxLength:ENTITY_ID_DISPLAY_LENGTH.compactMenu,
+                });
                 return html`
                 <ic-menu-item indicator="plus"
-                  .displayLabel=${truncateMiddle(displayName, {
-                    maxLength:ENTITY_ID_DISPLAY_LENGTH.compactMenu,
-                  })}
                   .rawLabel=${displayName}
                   .secondaryLabel=${formatEntityId(entityId,"compactMenu")}
                   .rawSecondaryLabel=${entityId}
                   @click=${() => this.addSeries(entityId)}>
+                  ${compactDisplayName}
                 </ic-menu-item>
               `;
               }) : html`<div class="entity-item">No available sensors</div>`}

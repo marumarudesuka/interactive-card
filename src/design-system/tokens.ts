@@ -116,8 +116,8 @@ export function getDesignTokenDeclarations(): string {
     --en-helper-font-weight:400;
     --en-control-gap:8px;
     --en-card-content-inset:18px;
-    --en-kpi-content-start-inset:4.5px;
-    --en-kpi-content-end-inset:9px;
+    --en-kpi-content-start-inset:1.125px;
+    --en-kpi-content-end-inset:4.5px;
     --en-field-group-gap:20px;
     --en-section-gap:24px;
     --en-menu-item-height:40px;

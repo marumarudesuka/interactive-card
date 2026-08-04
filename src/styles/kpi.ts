@@ -6,8 +6,8 @@ export const kpiStyle = css`
     width: 100%;
     min-width: 0;
     height: 100%;
-    grid-template-columns: minmax(0, 1fr) 75px;
-    column-gap: var(--kpi-content-gap, 10px);
+    grid-template-columns: minmax(0, 1fr) 55px;
+    column-gap: var(--kpi-content-gap, 6px);
     align-items: center;
   }
 
@@ -42,7 +42,7 @@ export const kpiStyle = css`
     display: flex;
     height: auto;
     align-items: baseline;
-    --metric-value-size: var(--kpi-value-size, 44px);
+    --metric-value-size: var(--kpi-value-size, 36px);
     --metric-value-weight: var(--en-data-weight, 700);
     --metric-value-letter-spacing: -2px;
     --metric-value-color: var(--en-surface-text-primary, var(--en-heading-primary, var(--primary-text-color)));

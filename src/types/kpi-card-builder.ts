@@ -11,6 +11,10 @@ export interface KpiCardDraft {
   autoScale?: boolean;
   decimals?: number | string;
   order?: number;
+  subtitle?: string;
+  /** @deprecated Legacy subtitle field. */
+  trend?: string;
+  trendMode?: "none" | "vs_yesterday" | "vs_last_period";
 }
 
 export interface NormalizedKpiCardDraft {
@@ -24,6 +28,8 @@ export interface NormalizedKpiCardDraft {
   autoScale: boolean;
   decimals: number;
   order?: number;
+  subtitle: string;
+  trendMode: "none" | "vs_yesterday" | "vs_last_period";
 }
 
 export type KpiCardDraftField =

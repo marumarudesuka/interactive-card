@@ -25,7 +25,16 @@ export class AppDialog extends LitElement {
   closeOnBackdrop = true;
   closeOnEscape = true;
 
-  static styles = css`:host { display:contents; }`;
+  static styles = css`
+    :host { display:contents; }
+
+    .footer-proxy {
+      display:block;
+      width:100%;
+      min-width:0;
+      box-sizing:border-box;
+    }
+  `;
 
   private forwardClose(event: CustomEvent<DialogCloseDetail>) {
     event.stopPropagation();
@@ -46,7 +55,9 @@ export class AppDialog extends LitElement {
     >
       <slot name="header" slot="header">${this.title}</slot>
       <slot></slot>
-      <slot name="footer" slot="footer"></slot>
+      <div class="footer-proxy" slot="footer">
+        <slot name="footer"></slot>
+      </div>
     </ic-dialog>`;
   }
 }
