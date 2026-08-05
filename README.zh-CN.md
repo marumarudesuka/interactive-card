@@ -120,18 +120,30 @@ KPI 卡片支持在面板内直接添加、移除和编辑。
 
 ### 手动安装
 
-仓库当前没有 HACS 元数据，因此需要手动安装。
+当前版本支持手动安装。
 
-1. 从最新 GitHub Release 下载 `interactive-card.js`，或自行从源码构建。
-2. 将文件复制到：
+1. 下载最新版本的 `interactive-card.js`。
+2. 将文件复制到 Home Assistant：
 
-   ```text
-   /config/www/interactive-card/interactive-card.js
+```text
+/config/www/interactive-card/interactive-card.js
    ```
 
-3. 在 Home Assistant 中打开**设置 → 仪表盘 → 资源**。
-4. 添加 `/local/interactive-card/interactive-card.js`，资源类型选择 **JavaScript 模块**。
-5. 重新加载仪表盘。如果仍然加载旧版本，可以更新资源 URL 的查询参数或清理浏览器缓存。
+3. 在 Home Assistant 中打开：
+
+```text
+设置 → 仪表盘 → 资源
+```
+
+4. 添加资源：
+
+```text
+/local/interactive-card/interactive-card.js
+```
+
+资源类型选择 **JavaScript 模块**。
+
+5. 刷新 Home Assistant 页面即可。
 
 ## 快速开始
 
@@ -151,79 +163,41 @@ autoScale: true
 
 ## 配置示例
 
+Interactive Card 目前包含三类主要卡片：
+
+- KPI 数据展示
+- 能源趋势分析
+- 回路功率监控
+
 ### KPI 区域
+
+KPI 卡片用于展示家庭能源核心指标，例如实时功率、今日用量、能源成本等。
 
 ```yaml
 type: custom:energy-kpi-section
 title: Energy Overview
 cards:
-  - id: current-power
-    entity: sensor.home_power
+  - entity: sensor.home_power
     title: Current Power
     icon: mdi:flash
     unit: W
-    decimals: 2
-    autoScale: true
-    enabled: true
-    order: 0
 
-  - id: today-energy
-    entity: sensor.home_energy_today
+  - entity: sensor.home_energy_today
     title: Today's Usage
     icon: mdi:lightning-bolt
     unit: kWh
-    decimals: 2
-    subtitle: Since 00:00
-    trendMode: vs_yesterday
-    enabled: true
-    order: 1
 ```
-
-KPI 配置还支持项目类型中定义的自定义图标颜色和历史值。从卡片管理菜单做出的修改会保存在当前浏览器中。
 
 ### Trend 卡片
 
 ```yaml
 type: custom:energy-trend-card
-id: main-energy-trend
 title: Energy Trend
-height: 350
-fullWidth: true
-timeframe: 24H
-category: power
 entities:
   - entity: sensor.home_power
     name: Main Power
     unit: W
-    chartMode: line
-    axis: left
-    decimals: 2
-    renderMode: smooth
-    enabled: true
-    order: 0
-
-  - entity: sensor.solar_power
-    name: Solar Generation
-    unit: W
-    chartMode: area
-    axis: auto
-    decimals: 2
-    renderMode: high_precision
-    enabled: true
-    order: 1
-
-  - entity: sensor.electricity_price
-    name: Electricity Rate
-    unit: EUR/kWh
-    category: cost
-    chartMode: bar
-    axis: right
-    decimals: 4
-    enabled: true
-    order: 2
 ```
-
-时间范围支持 `1H`、`24H`、`7D` 和 `30D`。每条 Series 可以使用 `line`、`area` 或 `bar`，坐标轴可以设置为 `auto`、`left` 或 `right`。
 
 ### Active Circuits
 
@@ -231,23 +205,14 @@ entities:
 type: custom:energy-circuit-section
 title: Active Circuits
 circuits:
-  - id: kitchen
-    name: Kitchen
+  - name: Kitchen
     entity: sensor.kitchen_power
     icon: mdi:stove
-    enabled: true
-    order: 0
 
-  - id: hvac
-    name: HVAC
+  - name: HVAC
     entity: sensor.hvac_power
     icon: mdi:air-conditioner
-    enabled: true
-    order: 1
 ```
-
-Circuit 编辑器只接受单位为 `W`、`kW` 或 `MW` 的实时功率传感器。已经存在但不符合要求的绑定仍会显示，方便用户识别和修正；在选择有效功率实体之前无法再次保存。
-
 
 ## 项目结构
 
