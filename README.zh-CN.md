@@ -67,23 +67,17 @@ KPI 卡片支持在面板内直接添加、移除和编辑。
   >
 </p>
 
+<p align="center">
+  <img
+    src="./docs/page2.2_trend_card_click.png"
+    alt="包含多条数据序列的能源趋势图"
+    width="100%"
+  >
+</p>
+
 每条 Series 均支持独立配置显示名称、单位、图表类型、坐标轴、小数位等参数。
 
 由于 Home Assistant 中不同传感器的数据采样频率可能存在差异，直接展示原始数据容易产生大量短时间波动。因此趋势卡片默认使用平滑显示优化趋势阅读体验，同时提供精确模式用于查看原始数据细节。
-
-
-<p align="center">
-  <img
-    src="./docs/trend_settings.png"
-    alt="Trend 卡片设置"
-    width="46%"
-  >
-  <img
-    src="./docs/edit_series.png"
-    alt="Trend Series 编辑界面"
-    width="46%"
-  >
-</p>
 
 ### Circuit
 
@@ -93,9 +87,9 @@ KPI 卡片支持在面板内直接添加、移除和编辑。
 
 <p align="center">
   <img
-    src="./docs/circuit_section.png"
+    src="./docs/page3_circuit.png"
     alt="回路配置编辑窗口"
-    width="46%"
+    width="100%"
   >
 </p>
 
@@ -134,6 +128,14 @@ KPI 卡片支持在面板内直接添加、移除和编辑。
 ```text
 设置 → 仪表盘 → 资源
 ```
+
+<p align="center">
+  <img
+    src="./docs/Setting_Dashboard_Resource.png"
+    alt="Home Assistant 仪表盘资源设置"
+    width="100%"
+  >
+</p>
 
 4. 添加资源：
 
