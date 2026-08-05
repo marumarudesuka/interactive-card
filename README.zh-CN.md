@@ -248,25 +248,6 @@ circuits:
 
 Circuit 编辑器只接受单位为 `W`、`kW` 或 `MW` 的实时功率传感器。已经存在但不符合要求的绑定仍会显示，方便用户识别和修正；在选择有效功率实体之前无法再次保存。
 
-## 开发
-
-安装依赖并启动 Vite 开发服务器：
-
-```bash
-npm install
-npm run dev
-```
-
-项目当前提供以下命令：
-
-| 命令 | 用途 |
-|---|---|
-| `npm run dev` | 启动 Vite 开发服务器 |
-| `npm run typecheck` | 运行 TypeScript 检查，不生成文件 |
-| `npm run verify` | 运行核心验证脚本 |
-| `npm run check` | 依次运行类型检查、核心验证和生产构建 |
-| `npm run build` | 构建 `dist/interactive-card.js` |
-| `npm run preview` | 使用 Vite 预览生产构建 |
 
 ## 项目结构
 
