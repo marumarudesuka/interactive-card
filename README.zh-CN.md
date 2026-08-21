@@ -2,9 +2,11 @@
 
 [English](./README.md) | 简体中文
 
-Interactive Card 是一组面向 Home Assistant 能源面板的 Lovelace 自定义卡片。
+Interactive Card 是一组用于 Home Assistant 能源面板的 Lovelace 自定义卡片。
 
-这个项目最初用于整理个人面板里的几个可复用卡片，后来逐步扩展为一套小型组件库，覆盖 KPI 数据、历史趋势和回路功率监控。各卡片使用同一套视觉设计，也可以按不同 Home Assistant 实体进行配置。
+这个项目最初是为了整理个人能源面板中重复使用的几个卡片组件，随着功能不断完善，逐渐扩展为一套轻量级的组件库。目前包含 KPI 数据展示、历史趋势分析以及回路功率监控等功能。
+
+所有卡片采用统一的视觉设计语言，并支持根据 Home Assistant 中不同的实体（Entity）进行灵活配置，帮助用户更直观地查看和管理家庭能源数据。
 
 <p align="center">
   <img
@@ -14,7 +16,7 @@ Interactive Card 是一组面向 Home Assistant 能源面板的 Lovelace 自定�
   >
 </p>
 
-## 功能
+## 目前功能
 
 Interactive Card 目前主要包含三个部分：
 
@@ -22,74 +24,72 @@ Interactive Card 目前主要包含三个部分：
 - **Trend** — 使用可配置的多条数据序列查看历史趋势
 - **Circuit** — 实时查看各回路的功率状态
 
-当前已经实现的功能包括：
+目前已支持以下功能：
 
-- 可配置的实体选择
-- 自定义标题、图标、单位、小数位和 KPI 副标题
-- 功率与电量单位自动缩放
-- 多条 Trend Series，以及 Line、Area、Bar 三种显示模式
-- 自动、左侧和右侧趋势轴
-- 可配置的趋势分辨率、时间范围和图表高度
-- 自定义回路名称、实时功率传感器和设备图标
-- 面板编辑结果保存在浏览器本地
-- Glass、Native、Solid 三种卡片样式
-- KPI 与回路卡片的响应式布局
+- 灵活选择 Home Assistant 实体（Entity）
+- 自定义卡片标题、图标、单位、小数位数以及 KPI 描述信息
+- 根据数据类型自动进行功率、电量单位转换与缩放
+- 支持多条趋势曲线（Trend Series），并提供 Line、Area、Bar 三种图表模式
+- 支持自动、左侧和右侧 Y 轴配置
+- 可调整趋势数据分辨率、时间范围以及图表高度
+- 支持自定义回路名称、实时功率实体以及设备图标
+- 编辑后的面板配置会保存于浏览器本地，刷新后仍可保持设置
+- 提供 Glass、Native、Solid 三种卡片视觉模式
+- KPI 卡片与回路卡片支持响应式布局，适配不同屏幕尺寸
 
-## 界面截图
+## 界面展示
 
 ### KPI
 
-可以直接在面板中添加、移除和配置 KPI 卡片。
+KPI 卡片支持在面板内直接添加、移除和编辑。
+用户可以选择显示的实体，并自定义标题、单位、小数位以及副标题展示方式。
 
 <p align="center">
   <img
-    src="./docs/kpi_section.png"
-    alt="KPI 卡片管理菜单"
-    width="30%"
-  >
-  <img
-    src="./docs/kpi_editor.png"
-    alt="KPI 卡片设置窗口"
-    width="62%"
+    src="./docs/page1_kpi_card_edit.png"
+    alt="KPI 卡片编辑界面"
+    width="100%"
   >
 </p>
 
 ### Trend
 
-趋势卡片支持多条 Series、混合图表模式、左右双轴，以及四种时间范围。
+趋势卡片用于展示能源数据随时间变化的趋势。
+
+支持多条数据序列（Series）同时显示，并可通过点击图例快速隐藏或显示对应曲线。
+
 
 <p align="center">
   <img
-    src="./docs/trend_card.png"
+    src="./docs/page2.1_configure_trend.png"
     alt="包含多条数据序列的能源趋势图"
     width="100%"
   >
 </p>
 
-每条 Series 都可以单独设置显示名称、单位、图表模式、坐标轴、小数位和数据分辨率。
-
 <p align="center">
   <img
-    src="./docs/trend_settings.png"
-    alt="Trend 卡片设置"
-    width="46%"
-  >
-  <img
-    src="./docs/edit_series.png"
-    alt="Trend Series 编辑界面"
-    width="46%"
+    src="./docs/page2.2_trend_card_click.png"
+    alt="包含多条数据序列的能源趋势图"
+    width="100%"
   >
 </p>
 
+每条 Series 均支持独立配置显示名称、单位、图表类型、坐标轴、小数位等参数。
+
+由于 Home Assistant 中不同传感器的数据采样频率可能存在差异，直接展示原始数据容易产生大量短时间波动。因此趋势卡片默认使用平滑显示优化趋势阅读体验，同时提供精确模式用于查看原始数据细节。
+
 ### Circuit
 
-回路条目可以修改名称、绑定实时功率传感器，并设置设备图标。
+回路卡片用于查看家庭不同用电回路的实时功率状态。
+
+用户可以自定义回路名称、绑定实时功率传感器，并设置对应的设备图标。通过状态指示灯和颜色反馈直观展示回路运行状态，同时提供实时功率和数据更新时间，帮助用户快速了解家庭各回路的用电情况。
 
 <p align="center">
   <img
-    src="./docs/circuit_section.png"
+    src="./docs/page3_circuit.png"
     alt="回路配置编辑窗口"
-    width="46%"
+    width="100%"
   >
 </p>
 
@@ -114,18 +114,38 @@ Interactive Card 目前主要包含三个部分：
 
 ### 手动安装
 
-仓库当前没有 HACS 元数据，因此需要手动安装。
+当前版本支持手动安装。
 
-1. 从最新 GitHub Release 下载 `interactive-card.js`，或自行从源码构建。
-2. 将文件复制到：
+1. 下载最新版本的 `interactive-card.js`。
+2. 将文件复制到 Home Assistant：
 
-   ```text
-   /config/www/interactive-card/interactive-card.js
+```text
+/config/www/interactive-card/interactive-card.js
    ```
 
-3. 在 Home Assistant 中打开**设置 → 仪表盘 → 资源**。
-4. 添加 `/local/interactive-card/interactive-card.js`，资源类型选择 **JavaScript 模块**。
-5. 重新加载仪表盘。如果仍然加载旧版本，可以更新资源 URL 的查询参数或清理浏览器缓存。
+3. 在 Home Assistant 中打开：
+
+```text
+设置 → 仪表盘 → 资源
+```
+
+<p align="center">
+  <img
+    src="./docs/Setting_Dashboard_Resource.png"
+    alt="Home Assistant 仪表盘资源设置"
+    width="100%"
+  >
+</p>
+
+4. 添加资源：
+
+```text
+/local/interactive-card/interactive-card.js
+```
+
+资源类型选择 **JavaScript 模块**。
+
+5. 刷新 Home Assistant 页面即可。
 
 ## 快速开始
 
@@ -145,79 +165,41 @@ autoScale: true
 
 ## 配置示例
 
+Interactive Card 目前包含三类主要卡片：
+
+- KPI 数据展示
+- 能源趋势分析
+- 回路功率监控
+
 ### KPI 区域
+
+KPI 卡片用于展示家庭能源核心指标，例如实时功率、今日用量、能源成本等。
 
 ```yaml
 type: custom:energy-kpi-section
 title: Energy Overview
 cards:
-  - id: current-power
-    entity: sensor.home_power
+  - entity: sensor.home_power
     title: Current Power
     icon: mdi:flash
     unit: W
-    decimals: 2
-    autoScale: true
-    enabled: true
-    order: 0
 
-  - id: today-energy
-    entity: sensor.home_energy_today
+  - entity: sensor.home_energy_today
     title: Today's Usage
     icon: mdi:lightning-bolt
     unit: kWh
-    decimals: 2
-    subtitle: Since 00:00
-    trendMode: vs_yesterday
-    enabled: true
-    order: 1
 ```
-
-KPI 配置还支持项目类型中定义的自定义图标颜色和历史值。从卡片管理菜单做出的修改会保存在当前浏览器中。
 
 ### Trend 卡片
 
 ```yaml
 type: custom:energy-trend-card
-id: main-energy-trend
 title: Energy Trend
-height: 350
-fullWidth: true
-timeframe: 24H
-category: power
 entities:
   - entity: sensor.home_power
     name: Main Power
     unit: W
-    chartMode: line
-    axis: left
-    decimals: 2
-    renderMode: smooth
-    enabled: true
-    order: 0
-
-  - entity: sensor.solar_power
-    name: Solar Generation
-    unit: W
-    chartMode: area
-    axis: auto
-    decimals: 2
-    renderMode: high_precision
-    enabled: true
-    order: 1
-
-  - entity: sensor.electricity_price
-    name: Electricity Rate
-    unit: EUR/kWh
-    category: cost
-    chartMode: bar
-    axis: right
-    decimals: 4
-    enabled: true
-    order: 2
 ```
-
-时间范围支持 `1H`、`24H`、`7D` 和 `30D`。每条 Series 可以使用 `line`、`area` 或 `bar`，坐标轴可以设置为 `auto`、`left` 或 `right`。
 
 ### Active Circuits
 
@@ -225,42 +207,14 @@ entities:
 type: custom:energy-circuit-section
 title: Active Circuits
 circuits:
-  - id: kitchen
-    name: Kitchen
+  - name: Kitchen
     entity: sensor.kitchen_power
     icon: mdi:stove
-    enabled: true
-    order: 0
 
-  - id: hvac
-    name: HVAC
+  - name: HVAC
     entity: sensor.hvac_power
     icon: mdi:air-conditioner
-    enabled: true
-    order: 1
 ```
-
-Circuit 编辑器只接受单位为 `W`、`kW` 或 `MW` 的实时功率传感器。已经存在但不符合要求的绑定仍会显示，方便用户识别和修正；在选择有效功率实体之前无法再次保存。
-
-## 开发
-
-安装依赖并启动 Vite 开发服务器：
-
-```bash
-npm install
-npm run dev
-```
-
-项目当前提供以下命令：
-
-| 命令 | 用途 |
-|---|---|
-| `npm run dev` | 启动 Vite 开发服务器 |
-| `npm run typecheck` | 运行 TypeScript 检查，不生成文件 |
-| `npm run verify` | 运行核心验证脚本 |
-| `npm run check` | 依次运行类型检查、核心验证和生产构建 |
-| `npm run build` | 构建 `dist/interactive-card.js` |
-| `npm run preview` | 使用 Vite 预览生产构建 |
 
 ## 项目结构
 
@@ -284,16 +238,30 @@ dist/                 生成的生产构建
 
 内部运行流程的简要说明见 [docs/architecture.md](./docs/architecture.md)。
 
-## 路线图
+## 未来规划
 
-项目目前没有正式的版本路线图。近期工作主要是增加不同 Home Assistant 配置下的实际测试、保持已保存配置的兼容性，并准备未来发布到 HACS 所需的仓库元数据。
+目前项目仍处于持续完善阶段，后续计划主要围绕稳定性、兼容性以及 Home Assistant 社区发布展开。
 
-## 参与贡献
+近期计划：
 
-欢迎提交问题和范围明确的 Pull Request。提交前请：
+- 增加不同 Home Assistant 配置环境下的实际测试，提升兼容性
+- 完善项目仓库结构和相关元数据，为未来发布到 HACS 做准备
+- 根据社区反馈持续优化卡片交互和能源数据展示体验
 
-1. 使用 `npm install` 安装依赖。
-2. 在单独分支中完成修改。
-3. 运行 `npm run check`。
-4. 如果修改涉及界面或实体逻辑，请说明用于验证的 Home Assistant 配置。
+未来规划：
 
+- 接入更多智能家居设备数据，实现更完整的家庭能源管理
+- 结合 Home Assistant 自动化能力，实现基于能源数据的智能控制，例如光伏、智能插座以及用电策略优化
+- 开发更多可编辑的能源场景组件，让用户可以根据家庭需求创建个性化场景
+- 持续完善界面设计与交互体验，提升能源数据查看、分析和管理的易用性
+
+## 反馈与建议
+
+欢迎通过 GitHub Issues 提交问题、功能建议或使用反馈。提交反馈时，如果方便，请提供：
+
+- Home Assistant 版本
+- 浏览器环境
+- 使用的实体类型
+- 问题截图或复现步骤
+
+这些信息可以帮助更快定位问题，并持续改进项目。同时也欢迎提出新的功能想法，共同完善 Interactive Card 的能源管理体验。
