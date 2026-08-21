@@ -5,22 +5,39 @@ import type {
 import { formatValue } from "./value-formatter.ts";
 
 const trendColors = [
-  "var(--en-color-series-1)",
-  "var(--en-color-series-2)",
-  "var(--en-color-series-3)",
-  "var(--en-color-series-4)",
-  "var(--en-color-series-5)",
-  "var(--en-color-series-6)",
+  "var(--en-color-series-1, #444D9E)",
+  "var(--en-color-series-2, #FBB03B)",
+  "var(--en-color-series-3, #8CC34B)",
+  "var(--en-color-series-4, #6971B1)",
+  "var(--en-color-series-5, #FCC063)",
+  "var(--en-color-series-6, #A3CF6F)",
 ];
 
+const trendColorFallbacks = [
+  "#444D9E", "#FBB03B", "#8CC34B", "#6971B1", "#FCC063", "#A3CF6F",
+];
+
+function getTrendPaletteIndex(index:number, seriesId?:string):number {
+  if (!seriesId) return Math.abs(index) % trendColors.length;
+  let hash = 0;
+  for (let position = 0; position < seriesId.length; position++) {
+    hash = ((hash << 5) - hash + seriesId.charCodeAt(position)) | 0;
+  }
+  return Math.abs(hash) % trendColors.length;
+}
+
+export function getTrendSeriesFallbackColor(index:number, seriesId?:string):string {
+  return trendColorFallbacks[getTrendPaletteIndex(index,seriesId)];
+}
+
 export function getTrendSeriesColor(
-  _configuredColor: string | undefined,
-  index: number
+  configuredColor: string | undefined,
+  index: number,
+  seriesId?: string
 ): string {
-  // Series colors are a brand-system concern. Keep the configured color
-  // parameter for stored/YAML schema compatibility, but never allow a legacy
-  // per-series literal to bypass the shared palette.
-  return trendColors[index % trendColors.length];
+  const explicitColor = configuredColor?.trim();
+  if (explicitColor) return explicitColor;
+  return trendColors[getTrendPaletteIndex(index,seriesId)];
 }
 
 export interface TrendValueFormatOptions {

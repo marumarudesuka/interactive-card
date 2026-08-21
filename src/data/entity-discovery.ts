@@ -1,5 +1,8 @@
 ﻿import type { HomeAssistant } from "custom-card-helpers";
 
+import { hasLegacyEcoMainName } from "../discovery/adapters/ecomain-adapter.ts";
+import { createDiscoveredMetric } from "../discovery/metric-classifier.ts";
+
 export type MatchRule = {
   device_class?: string;
   state_class?: string;
@@ -71,7 +74,11 @@ function scoreEntity(entityId: string, attributes: any, template: DiscoveryTempl
     if (title.includes(keyword)) score += 5;
   }
 
-  if (entityId.toLowerCase().includes("ecomain") || (attributes?.friendly_name || "").toLowerCase().includes("ecomain")) {
+  const discoveredMetric = createDiscoveredMetric(entityId, {
+    state: "0",
+    attributes: attributes ?? {},
+  });
+  if (hasLegacyEcoMainName(discoveredMetric)) {
     score += 5;
   }
 

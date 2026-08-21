@@ -13,12 +13,10 @@ import {
   defaultKpiTemplates,
 } from "../data/kpi-config";
 import {
-  createDiscoveryTemplates,
   getKpiCardKey,
 } from "../data/kpi-card-model";
 import { KpiCardManager } from "../data/kpi-card-manager";
-import { discoverForTemplates } from "../data/entity-discovery";
-import { dispatchConfigChanged } from "../config/config-events";
+import { createKpiDiscoveryResults, discoverEnergyMetrics } from "../discovery/discovery-consumers.ts";
 import { normalizeEnergyKpiSectionConfig } from "../config/config-normalizer";
 import type {
   CustomKpiConfig,
@@ -26,17 +24,28 @@ import type {
   KpiTemplate,
 } from "../config/config.types";
 import { validateKpiCardConfig } from "../config/config-validation";
+import { kpiCardVisualContextStyle } from "../styles/kpi-card-visual-context";
 import { mergeKpiConfigSources } from "../config/kpi-config-merger";
 import { buildKpiRepositorySnapshot } from "../config/kpi-config-persistence";
-import { KpiConfigCoordinator } from "../config/kpi-config-coordinator";
-import { LocalStorageKpiConfigRepository } from "../repositories/local-storage-kpi-config-repository";
+import {
+  getPendingKpiScope,
+  LocalStoragePendingKpiRepository,
+} from "../repositories/local-storage-pending-kpi-repository.ts";
 import type {
   KpiConfigSources,
   ResolvedKpiConfig,
 } from "../types/kpi-config-resolution";
 import type { KpiCardDraft } from "../types/kpi-card-builder";
 import type { KpiCardBuilderSubmitDetail } from "./kpi/kpi-card-builder-dialog";
+import type { KpiInspectRequestDetail } from "./kpi/metric-inspector";
 import { energyGridStyle } from "../styles/energy-grid";
+import "../editors/energy-kpi-section-editor.ts";
+import "./kpi/metric-inspector";
+import { getKpiCardGeometryStyle } from "../helpers/kpi-card-geometry.ts";
+import {
+  getEligiblePendingKpiCards,
+  resolveEffectiveKpiCards,
+} from "../helpers/kpi-effective-card-resolver.ts";
 
 const kpiTemplates = defaultKpiTemplates;
 const kpiCardManager = new KpiCardManager(kpiTemplates);
@@ -53,14 +62,15 @@ function isCustomKpi(card: CustomKpiConfig): boolean {
 
 export class EnergyKpiSection extends LitElement {
 
+  static getConfigElement() {
+    return document.createElement("energy-kpi-section-editor");
+  }
+
 
 
   private _hass!: HomeAssistant;
-  private readonly _repository = new LocalStorageKpiConfigRepository();
-  private readonly _coordinator = new KpiConfigCoordinator(
-    this._repository,
-    kpiTemplates
-  );
+  private readonly _pendingRepository = new LocalStoragePendingKpiRepository();
+  private _pendingCards:CustomKpiConfig[] = [];
   private _yamlCards: CustomKpiConfig[] = [];
   private _discovery: KpiConfigSources["discovery"] = {};
   private _resolutionVersion = 0;
@@ -84,7 +94,8 @@ export class EnergyKpiSection extends LitElement {
   private _builderDraft: KpiCardDraft = {};
   private _editingCardKey?: string;
 
-  private _dragIndex: number | null = null;
+  private _quickHiddenKpis = new Set<string>();
+  private _inspectedKpi?: CustomKpiConfig;
 
 
 
@@ -126,9 +137,9 @@ export class EnergyKpiSection extends LitElement {
 
   private _createDiscoveryResults(): KpiConfigSources["discovery"] {
     if(!this._hass) return {};
-    return discoverForTemplates(
-      this._hass,
-      createDiscoveryTemplates(kpiTemplates)
+    return createKpiDiscoveryResults(
+      discoverEnergyMetrics(this._hass),
+      kpiTemplates
     );
   }
 
@@ -137,12 +148,12 @@ export class EnergyKpiSection extends LitElement {
     this._discovery = discovery;
 
     if(applySynchronousBaseline){
-      const baseline = mergeKpiConfigSources({
+      const baseline = resolveEffectiveKpiCards({
         templates: kpiTemplates,
-        yamlCards: this._yamlCards,
+        formalCards: this._yamlCards,
         discovery,
       });
-      this._captureEntityLocks(baseline);
+      this._captureEntityLocks(baseline.flatMap((item) => item.resolved ? [item.resolved] : []));
       this.config = {
         ...this.config,
         cards: baseline.map((item) => item.config),
@@ -151,16 +162,24 @@ export class EnergyKpiSection extends LitElement {
     }
 
     const version = ++this._resolutionVersion;
-    void this._coordinator.resolve({
-      yamlCards: this._yamlCards,
-      discovery,
-    }).then((resolved) => {
+    void this._pendingRepository.load(getPendingKpiScope(this.config)).then((stored) => {
       if(version !== this._resolutionVersion) return;
+      this._pendingCards = getEligiblePendingKpiCards(this._yamlCards,stored);
+      if (this._pendingCards.length !== stored.length) {
+        void this._pendingRepository.save(getPendingKpiScope(this.config), this._pendingCards);
+      }
+      const effective = resolveEffectiveKpiCards({
+        templates:kpiTemplates,
+        formalCards:this._yamlCards,
+        pendingCards:this._pendingCards,
+        discovery,
+      });
+      const cards = effective.map((item) => item.config);
       this._hasRepositoryResolution = true;
-      this._captureEntityLocks(resolved);
+      this._captureEntityLocks(effective.flatMap((item) => item.resolved ? [item.resolved] : []));
       this.config = {
         ...this.config,
-        cards: resolved.map((item) => item.config),
+        cards,
       };
       this.requestUpdate();
     }).catch((error) => {
@@ -176,7 +195,7 @@ export class EnergyKpiSection extends LitElement {
 
 
 
-  static styles = [energyGridStyle, css`
+  static styles = [energyGridStyle, kpiCardVisualContextStyle, css`
 
 
 
@@ -193,20 +212,6 @@ export class EnergyKpiSection extends LitElement {
     }
 
 
-
-
-
-
-    .grid{
-      --kpi-card-height:170px;
-      --kpi-padding:20px;
-      --kpi-value-size:42px;
-      --kpi-unit-size:16px;
-      --kpi-icon-size:64px;
-      --kpi-icon-symbol-size:30px;
-      --kpi-sparkline-display:none;
-      --kpi-chart-action-display:none;
-    }
 
 
 
@@ -234,27 +239,6 @@ export class EnergyKpiSection extends LitElement {
 
     }
 
-    @container (max-width:1200px){
-      .grid{
-        --kpi-card-height:160px;
-        --kpi-padding:18px;
-        --kpi-value-size:40px;
-        --kpi-icon-size:58px;
-        --kpi-icon-symbol-size:28px;
-      }
-    }
-
-    @container (max-width:599px){
-      .grid{
-        --kpi-card-height:150px;
-        --kpi-padding:14px;
-        --kpi-value-size:clamp(16px,7vw,24px);
-        --kpi-unit-size:13px;
-        --kpi-icon-size:46px;
-        --kpi-icon-symbol-size:23px;
-      }
-    }
-
   `];
 
 
@@ -267,6 +251,27 @@ export class EnergyKpiSection extends LitElement {
 
   private toggleHeaderMenu() {
     this.headerMenuOpen = !this.headerMenuOpen;
+    this.requestUpdate();
+  }
+
+  private _toggleQuickKpi(e:CustomEvent<CustomKpiConfig>){
+    const key = getKpiCardKey(e.detail);
+    if(!key) return;
+    const next = new Set(this._quickHiddenKpis);
+    next.has(key) ? next.delete(key) : next.add(key);
+    this._quickHiddenKpis = next;
+    this.requestUpdate();
+  }
+
+  private _openMetricInspector(event: CustomEvent<KpiInspectRequestDetail>) {
+    event.preventDefault();
+    event.stopPropagation();
+    this._inspectedKpi = { ...event.detail.kpi };
+    this.requestUpdate();
+  }
+
+  private _closeMetricInspector() {
+    this._inspectedKpi = undefined;
     this.requestUpdate();
   }
 
@@ -308,11 +313,6 @@ export class EnergyKpiSection extends LitElement {
     };
     this.requestUpdate();
 
-    void this._coordinator.saveUserCards(snapshot).catch((error) => {
-      console.error("[KPI] Unable to save KPI configuration", error);
-    });
-
-    dispatchConfigChanged(this, this.config);
   }
 
 
@@ -323,18 +323,29 @@ export class EnergyKpiSection extends LitElement {
 
 
 
-  private _toggleKpi(e:any){
+  private async _toggleKpi(e:any){
     const item = e.detail as KpiTemplate;
     if(!item || !item.id){
       return;
     }
+    const templateId = item.id;
 
-    const cards = kpiCardManager.toggleTemplate(
-      this.config.cards,
-      item
-    ).cards;
-
-    this._commitConfigChange(cards);
+    if (this._yamlCards.some((card) => getKpiCardKey(card) === templateId)) {
+      console.warn(`[KPI] ${templateId} is stored in Lovelace; change its collection state in the Home Assistant editor.`);
+      return;
+    }
+    const current = this.config.cards.find((card) => card.id === templateId);
+    const enabled = current?.enabled !== false;
+    const pending = this._pendingCards.find((card) => card.id === templateId);
+    const scope = getPendingKpiScope(this.config);
+    const discovered = this._discovery?.[templateId]?.[0]?.entityId;
+    await this._pendingRepository.upsert(scope, {
+      ...pending,
+      id:templateId, title:item.title, icon:item.icon, category:item.category,
+      unit:item.unit, entity:pending?.entity || discovered || item.entity || item.defaultEntity,
+      enabled:!enabled, autoScale:item.autoScale, decimals:item.decimals,
+    });
+    this._startConfigResolution(true);
   }
 
   private _openCreateBuilder(){
@@ -349,6 +360,11 @@ export class EnergyKpiSection extends LitElement {
   private _openEditBuilder(e:CustomEvent<CustomKpiConfig>){
     const card = e.detail;
     if(!card) return;
+    const key = getKpiCardKey(card);
+    if (!key || !this._pendingCards.some((item) => getKpiCardKey(item) === key)) {
+      console.warn("[KPI] Formal Lovelace KPI details are edited through the Home Assistant card editor.");
+      return;
+    }
     this._builderMode = "edit";
     this._builderDraft = { ...card };
     this._editingCardKey = getKpiCardKey(card);
@@ -363,41 +379,46 @@ export class EnergyKpiSection extends LitElement {
     this.requestUpdate();
   }
 
-  private _submitBuilder(
+  private async _submitBuilder(
     e:CustomEvent<KpiCardBuilderSubmitDetail>
   ){
     e.stopPropagation();
     const { config, mode } = e.detail;
 
-    if(mode === "edit" && this._editingCardKey){
-      const result = kpiCardManager.update(
-        this.config.cards,
-        this._editingCardKey,
-        config
+    const scope = getPendingKpiScope(this.config);
+    if(mode === "edit" && this._editingCardKey &&
+      this._pendingCards.some((item) => getKpiCardKey(item) === this._editingCardKey)){
+      const next = this._pendingCards.map((item) =>
+        getKpiCardKey(item) === this._editingCardKey ? { ...config } : item
       );
-      if(result.changed) this._commitConfigChange(result.cards);
-    }else{
+      await this._pendingRepository.save(scope, next);
+    }else if(mode === "create"){
       const customOrder = this.config.cards.filter(isCustomKpi).length;
-      const result = kpiCardManager.create(this.config.cards, {
+      await this._pendingRepository.add(scope, {
         ...config,
         type: "custom",
         name: config.title,
         order: config.order ?? customOrder,
       });
-      if(result.changed) this._commitConfigChange(result.cards);
     }
-
     this._closeBuilder();
+    this._startConfigResolution(true);
   }
 
-  private _toggleCustomKpi(e:CustomEvent<CustomKpiConfig>){
+  private async _toggleCustomKpi(e:CustomEvent<CustomKpiConfig>){
     const card = e.detail;
     const key = card ? getKpiCardKey(card) : undefined;
     if(!card || !key) return;
-    const result = card.enabled
-      ? kpiCardManager.disable(this.config.cards, key)
-      : kpiCardManager.enable(this.config.cards, key);
-    if(result.changed) this._commitConfigChange(result.cards);
+    const pending = this._pendingCards.find((item) => getKpiCardKey(item) === key);
+    if (!pending) {
+      console.warn("[KPI] Formal Lovelace KPIs are managed through the Home Assistant card editor.");
+      return;
+    }
+    await this._pendingRepository.upsert(getPendingKpiScope(this.config), {
+      ...pending,
+      enabled:pending.enabled === false,
+    });
+    this._startConfigResolution(true);
   }
 
   private _removeKpi(e:any){
@@ -407,57 +428,14 @@ export class EnergyKpiSection extends LitElement {
     if(result.changed) this._commitConfigChange(result.cards);
   }
 
-  private _deleteCustomKpi(e:CustomEvent<{ id:string }>){
+  private async _deleteCustomKpi(e:CustomEvent<{ id:string }>){
     e.stopPropagation();
     const id = e.detail?.id;
     if(!id) return;
-    const card = this.config.cards.find(
-      (item) => getKpiCardKey(item) === id
-    );
-    if(!card || !isCustomKpi(card)) return;
-    const result = kpiCardManager.remove(this.config.cards, id);
-    if(result.changed) this._commitConfigChange(result.cards);
+    if(!this._pendingCards.some((item) => getKpiCardKey(item) === id)) return;
+    await this._pendingRepository.remove(getPendingKpiScope(this.config), id);
     this._closeBuilder();
-  }
-
-  private _handleSetCardEntity(e:any){
-    const detail = e.detail || {};
-    const key = detail.key;
-    const entityId = detail.entity;
-    if(!key || !entityId){
-      detail.result = {
-        success: false,
-        reason: "Unable to identify the KPI card or entity",
-      };
-      return;
-    }
-    const cardExists = this.config.cards.some(
-      (card) => getKpiCardKey(card) === key
-    );
-    if(!cardExists){
-      detail.result = {
-        success: false,
-        reason: "KPI card configuration not found",
-      };
-      return;
-    }
-    const result = kpiCardManager.updateEntity(
-      this.config.cards,
-      key,
-      entityId,
-      this._entityLocks
-    );
-    if(result.locked){
-      detail.result = {
-        success: false,
-        reason: "Entity managed by YAML configuration",
-      };
-      return;
-    }
-    if(result.changed){
-      this._commitConfigChange(result.cards);
-    }
-    detail.result = { success: true };
+    this._startConfigResolution(true);
   }
 
   private _handleUpdateCardEntity(e:any){
@@ -477,34 +455,6 @@ export class EnergyKpiSection extends LitElement {
     if(result.changed) this._commitConfigChange(result.cards);
   }
 
-  private _handleUpdateCardSettings(e:any){
-    const detail = e.detail || {};
-    const key = detail.key;
-    if(!key) return;
-
-    const result = kpiCardManager.update(this.config.cards, key, {
-      subtitle: detail.subtitle ?? "",
-      trend: undefined,
-      trendMode: detail.trendMode ?? "none",
-    });
-
-    if(result.changed) this._commitConfigChange(result.cards);
-  }
-
-  private _handleDeleteCard(e:CustomEvent<{ id:string }>){
-    e.stopPropagation();
-    const id = e.detail?.id;
-    if(!id) return;
-    const card = this.config.cards.find(
-      (item) => getKpiCardKey(item) === id
-    );
-    if(!card) return;
-
-    const result = isCustomKpi(card)
-      ? kpiCardManager.remove(this.config.cards, id)
-      : kpiCardManager.disable(this.config.cards, id);
-    if(result.changed) this._commitConfigChange(result.cards);
-  }
 
 
 
@@ -512,40 +462,6 @@ export class EnergyKpiSection extends LitElement {
 
 
 
-
-
-  private _onDragStart(e: DragEvent, idx:number){
-    const dt = (e.dataTransfer as DataTransfer | null);
-    if(dt){
-      dt.setData("text/plain", String(idx));
-      dt.effectAllowed = 'move';
-    }
-    this._dragIndex = idx;
-  }
-
-  private _onDragOver(e: DragEvent){
-    e.preventDefault();
-    const dt = e.dataTransfer;
-    if(dt) dt.dropEffect = 'move';
-  }
-
-  private _onDrop(e: DragEvent, idx:number){
-    e.preventDefault();
-    const fromStr = e.dataTransfer?.getData("text/plain");
-    let from = this._dragIndex;
-    if(fromStr) from = parseInt(fromStr,10);
-    const to = idx;
-    if(from == null || isNaN(from)) return;
-    if(from === to) return;
-    const result = kpiCardManager.reorder(this.config.cards, from, to);
-    if(result.changed) this._commitConfigChange(result.cards);
-    this._dragIndex = null;
-  }
-
-  private _onDragEnd(_e: DragEvent){
-    this._dragIndex = null;
-    this.requestUpdate();
-  }
 
   render(){
 
@@ -592,8 +508,10 @@ export class EnergyKpiSection extends LitElement {
           <kpi-picker
             .items=${availableKPIs}
             .customItems=${this.config.cards.filter(isCustomKpi)}
+            .quickView=${false}
             .selectedItems=${this.config.cards
-              .filter((card:any) => Boolean(card.enabled))
+              .filter((card:any) => Boolean(card.enabled) &&
+                !this._quickHiddenKpis.has(getKpiCardKey(card) ?? ""))
               .map((card:any) => card.id ?? card.entity)}
             .hass=${this._hass}
             @toggle-kpi=${this._toggleKpi}
@@ -602,6 +520,7 @@ export class EnergyKpiSection extends LitElement {
             @toggle-custom-kpi=${this._toggleCustomKpi}
             @remove-kpi=${this._removeKpi}
             @update-card-entity=${this._handleUpdateCardEntity}
+            @quick-toggle-kpi=${this._toggleQuickKpi}
           ></kpi-picker>
         </ic-popover>
       </ic-section-header>
@@ -636,28 +555,26 @@ export class EnergyKpiSection extends LitElement {
 
 
 
-      <div class="grid energy-card-grid">
+      <div class="grid energy-card-grid kpi-card-visual-context kpi-card-visual-context-responsive"
+        style=${this.config.cardHeight
+          ? `--kpi-card-height:${this.config.cardHeight}px;${getKpiCardGeometryStyle(this.config.cardHeight)}`
+          : ""}>
 
         ${
           this.config.cards
             .filter((card:any) => Boolean(card.enabled))
-            .map((card:any, idx:number)=>{
+            .filter((card:any) =>
+              !this._quickHiddenKpis.has(getKpiCardKey(card) ?? ""))
+            .map((card:any)=>{
               const validation = validateKpiCardConfig(card);
               return html`
-              <div class="draggable" draggable="true"
-                @dragstart=${(e:DragEvent)=>this._onDragStart(e, idx)}
-                @dragover=${(e:DragEvent)=>this._onDragOver(e)}
-                @drop=${(e:DragEvent)=>this._onDrop(e, idx)}
-                @dragend=${(e:DragEvent)=>this._onDragEnd(e)}
-              >
+              <div class="draggable">
                 <energy-kpi-card
                   .config=${card}
                   .hass=${this._hass}
                   .validation=${validation}
+                  @kpi-inspect-request=${this._openMetricInspector}
                   @edit-custom-kpi=${this._openEditBuilder}
-                  @set-card-entity=${(ev:any)=>{ ev.stopPropagation(); this._handleSetCardEntity(ev); }}
-                  @update-kpi-card-settings=${(ev:any)=>{ ev.stopPropagation(); this._handleUpdateCardSettings(ev); }}
-                  @delete-kpi-card=${this._handleDeleteCard}
                 ></energy-kpi-card>
               </div>
 
@@ -666,6 +583,13 @@ export class EnergyKpiSection extends LitElement {
         }
 
       </div>
+
+      <ic-metric-inspector
+        .open=${Boolean(this._inspectedKpi)}
+        .hass=${this._hass}
+        .kpi=${this._inspectedKpi}
+        @metric-inspector-close=${this._closeMetricInspector}
+      ></ic-metric-inspector>
 
 
 

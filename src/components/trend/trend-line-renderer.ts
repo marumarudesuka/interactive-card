@@ -1,12 +1,26 @@
 import { LitElement, css, html, type PropertyValues } from "lit";
 
 import {
+  getTrendBarGeometry,
   getTrendTimeDomain,
+  getTrendZeroBaselineY,
   getTrendX,
   getTrendY,
 } from "../../helpers/trend-chart-geometry";
-import { getTrendSeriesColor } from "../../helpers/trend-chart-formatters";
+import {
+  getTrendSeriesColor,
+  getTrendSeriesFallbackColor,
+} from "../../helpers/trend-chart-formatters";
+import {
+  createTrendAreaFill,
+  normalizeTrendCanvasColor,
+} from "../../helpers/trend-canvas-color";
 import type { TrendChartLayout } from "../../helpers/trend-chart-layout";
+import {
+  getFiniteTrendGeometry,
+  isValidTrendPlotSize,
+  runIsolatedTrendSeriesRender,
+} from "../../helpers/trend-render-guard";
 import {
   createMonotoneCurve,
   type TrendCurvePoint,
@@ -18,19 +32,14 @@ import type {
 } from "../../types/trend";
 
 interface DrawableTrendSeries {
+  id: string;
+  entity: string;
+  axisId: string;
+  colorInput: string;
   color: string;
   chartMode: TrendSeries["chartMode"];
   points: TrendCurvePoint[];
   lineStyle: "solid" | "dashed";
-}
-
-function colorWithAlpha(color: string, alpha: number): string {
-  const match = /^#([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i.exec(color);
-  if (!match) return color;
-  return `rgba(${parseInt(match[1], 16)},${parseInt(
-    match[2],
-    16
-  )},${parseInt(match[3], 16)},${alpha})`;
 }
 
 function resolveCssColor(styles: CSSStyleDeclaration, color: string): string {
@@ -61,6 +70,25 @@ function resolveCssColor(styles: CSSStyleDeclaration, color: string): string {
   }
 
   return resolved;
+}
+
+function sampleCanvasColor(color:string):string | undefined {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1;
+  canvas.height = 1;
+  const context = canvas.getContext("2d",{ willReadFrequently:true });
+  if (!context) return undefined;
+  context.clearRect(0,0,1,1);
+  context.fillStyle = "rgba(1, 2, 3, 0.5)";
+  const sentinel = context.fillStyle;
+  context.fillStyle = color;
+  if (context.fillStyle === sentinel && color.replaceAll(" ","") !== sentinel.replaceAll(" ","")) {
+    return undefined;
+  }
+  context.fillRect(0,0,1,1);
+  const [red,green,blue,alpha] = context.getImageData(0,0,1,1).data;
+  if (!alpha) return "rgba(0, 0, 0, 0)";
+  return `rgba(${red}, ${green}, ${blue}, ${Number((alpha / 255).toFixed(3))})`;
 }
 
 function traceCurve(
@@ -148,6 +176,10 @@ export class TrendLineRenderer extends LitElement {
       !this.axes.length
     ) return;
 
+    if (!isValidTrendPlotSize(layout.plot.width,layout.plot.height)) {
+      return;
+    }
+
     const pixelRatio = Math.max(1, window.devicePixelRatio || 1);
     canvas.width = Math.round(layout.width * pixelRatio);
     canvas.height = Math.round(layout.height * pixelRatio);
@@ -155,99 +187,149 @@ export class TrendLineRenderer extends LitElement {
     context.clearRect(0, 0, layout.width, layout.height);
 
     const styles = getComputedStyle(this);
-    context.strokeStyle =
-      styles.getPropertyValue("--divider-color").trim() ||
-      "rgba(127,127,127,.25)";
-    context.lineWidth = 1;
-    for (const tick of this.axes[0].ticks) {
-      const y = getTrendY(tick.value, this.axes[0], layout.plot);
-      context.beginPath();
-      context.moveTo(layout.plot.left, y);
-      context.lineTo(layout.plot.right, y);
-      context.stroke();
-    }
+    const colorProbe = document.createElement("span");
+    colorProbe.style.cssText = "position:absolute;visibility:hidden;pointer-events:none";
+    this.renderRoot.append(colorProbe);
+    const resolveComputedColor = (color:string) => {
+      colorProbe.style.color = "";
+      colorProbe.style.color = color;
+      // Unsupported expressions leave the declaration empty. Reading
+      // computedStyle in that state would return inherited text color and
+      // incorrectly turn the Series black.
+      if (!colorProbe.style.color) return "";
+      return getComputedStyle(colorProbe).color;
+    };
+    try {
+      context.strokeStyle =
+        styles.getPropertyValue("--divider-color").trim() ||
+        "rgba(127,127,127,.25)";
+      context.lineWidth = 1;
+      for (const tick of this.axes[0].ticks) {
+        const y = getTrendY(tick.value, this.axes[0], layout.plot);
+        if (!Number.isFinite(y)) continue;
+        context.beginPath();
+        context.moveTo(layout.plot.left, y);
+        context.lineTo(layout.plot.right, y);
+        context.stroke();
+      }
 
-    const domain = getTrendTimeDomain(this.series);
-    const drawableSeries: DrawableTrendSeries[] = this.series.flatMap(
-      (series, index) => {
-      const axis = this.axes.find((item) => item.id === series.axisId);
-        if (!axis || !series.points.length) return [];
+      // Bars are semantically anchored to zero. Reinforce that baseline over
+      // the ordinary grid for each visible Bar axis (left/right may differ).
+      const barAxisIds = new Set(
+        this.series
+          .filter((series) => series.chartMode === "bar")
+          .map((series) => series.axisId)
+      );
+      const zeroBaselines: number[] = [];
+      for (const axis of this.axes) {
+        if (!barAxisIds.has(axis.id)) continue;
+        const zeroY = getTrendZeroBaselineY(axis,layout.plot);
+        if (zeroY === undefined || zeroBaselines.some((value) => Math.abs(value - zeroY) < .5)) {
+          continue;
+        }
+        zeroBaselines.push(zeroY);
+      }
+      context.save();
+      context.lineWidth = 1.5;
+      for (const zeroY of zeroBaselines) {
+        context.beginPath();
+        context.moveTo(layout.plot.left,zeroY);
+        context.lineTo(layout.plot.right,zeroY);
+        context.stroke();
+      }
+      context.restore();
 
-        return [{
-          color: resolveCssColor(
-            styles,
-            getTrendSeriesColor(series.color, index)
-          ),
-          chartMode:series.chartMode,
-          lineStyle: series.lineStyle,
-          points: series.points.map((point) => ({
+      const domain = getTrendTimeDomain(this.series);
+      this.series.forEach((series, index) => {
+        const axis = this.axes.find((item) => item.id === series.axisId);
+        let colorInput = series.color?.trim() ?? "";
+        let drawable: DrawableTrendSeries | undefined;
+        runIsolatedTrendSeriesRender(context, () => {
+          if (!axis || !series.points.length) return false;
+
+          const fallback = getTrendSeriesFallbackColor(index,series.id);
+          colorInput = getTrendSeriesColor(series.color,index,series.id);
+          const color = normalizeTrendCanvasColor(
+            resolveCssColor(styles,colorInput),
+            resolveComputedColor,
+            sampleCanvasColor,
+            fallback
+          );
+          const points = getFiniteTrendGeometry(series.points.map((point) => ({
             x: getTrendX(point.timestamp, domain, layout.plot),
             y: getTrendY(point.value, axis, layout.plot),
-          })),
-        }];
-      }
-    );
+          })));
+          if (!points.length) return false;
 
-    for (const drawable of drawableSeries) {
-      if (drawable.chartMode !== "area") continue;
-      if (drawable.points.length < 2) continue;
-      const gradient = context.createLinearGradient(
-        0,
-        layout.plot.top,
-        0,
-        layout.plot.bottom
-      );
-      gradient.addColorStop(0, colorWithAlpha(drawable.color, 0.35));
-      gradient.addColorStop(1, colorWithAlpha(drawable.color, 0));
-      context.beginPath();
-      traceCurve(context, drawable.points, this.curve);
-      const first = drawable.points[0];
-      const last = drawable.points[drawable.points.length - 1];
-      context.lineTo(last.x, layout.plot.bottom);
-      context.lineTo(first.x, layout.plot.bottom);
-      context.closePath();
-      context.fillStyle = gradient;
-      context.fill();
-    }
+          drawable = {
+            id: series.id,
+            entity: series.entity,
+            axisId: series.axisId,
+            colorInput,
+            color,
+            chartMode:series.chartMode,
+            lineStyle: series.lineStyle,
+            points,
+          };
 
-    for (const drawable of drawableSeries) {
-      if (drawable.chartMode === "bar") {
-        const barWidth = Math.max(
-          2,
-          Math.min(18, layout.plot.width / Math.max(1, drawable.points.length) * .65)
-        );
-        context.fillStyle = drawable.color;
-        for (const point of drawable.points) {
-          context.fillRect(
-            point.x - barWidth / 2,
-            point.y,
-            barWidth,
-            Math.max(1, layout.plot.bottom - point.y)
-          );
-        }
-        continue;
-      }
-      if (drawable.points.length > 1) {
-        context.beginPath();
-        traceCurve(context, drawable.points, this.curve);
-        context.strokeStyle = drawable.color;
-        context.lineWidth = 2;
-        context.lineCap = "round";
-        context.lineJoin = "round";
-        context.setLineDash(
-          drawable.lineStyle === "dashed" ? [7, 5] : []
-        );
-        context.stroke();
-        context.setLineDash([]);
-        continue;
-      }
+          if (drawable.chartMode === "bar") {
+            const barWidth = Math.max(
+              2,
+              Math.min(18, layout.plot.width / Math.max(1, points.length) * .65)
+            );
+            context.fillStyle = color;
+            for (const point of series.points) {
+              const x = getTrendX(point.timestamp,domain,layout.plot);
+              const bar = getTrendBarGeometry(point.value,axis,layout.plot);
+              if (!Number.isFinite(x) || !Number.isFinite(bar.top) ||
+                !Number.isFinite(bar.height)) continue;
+              context.fillRect(
+                x - barWidth / 2,
+                bar.top,
+                barWidth,
+                bar.height
+              );
+            }
+            return true;
+          }
 
-      const point = drawable.points[0];
-      if (!point) continue;
-      context.fillStyle = drawable.color;
-      context.beginPath();
-      context.arc(point.x, point.y, 4, 0, Math.PI * 2);
-      context.fill();
+          if (drawable.chartMode === "area" && points.length > 1) {
+            const areaFill = createTrendAreaFill(
+              context,layout.plot.top,layout.plot.bottom,color
+            );
+            if (areaFill) {
+              context.beginPath();
+              traceCurve(context,points,this.curve);
+              context.lineTo(points[points.length - 1].x,layout.plot.bottom);
+              context.lineTo(points[0].x,layout.plot.bottom);
+              context.closePath();
+              context.fillStyle = areaFill;
+              context.fill();
+            }
+          }
+
+          if (points.length > 1) {
+            context.beginPath();
+            traceCurve(context,points,this.curve);
+            context.strokeStyle = color;
+            context.lineWidth = 2;
+            context.lineCap = "round";
+            context.lineJoin = "round";
+            context.setLineDash(series.lineStyle === "dashed" ? [7,5] : []);
+            context.stroke();
+            return true;
+          }
+
+          context.fillStyle = color;
+          context.beginPath();
+          context.arc(points[0].x,points[0].y,4,0,Math.PI * 2);
+          context.fill();
+          return true;
+        });
+
+      });
+    } finally {
+      colorProbe.remove();
     }
   }
 

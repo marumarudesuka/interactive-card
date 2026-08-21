@@ -16,11 +16,17 @@ export class IcSelectField extends LitElement {
     value: { type:String },
     options: { attribute:false },
     disabled: { type:Boolean, reflect:true },
+    selectedLabel: { type:String },
+    actionIcon: { type:String },
+    actionLabel: { type:String },
   };
 
   value = "";
   options: readonly SelectFieldOption[] = [];
   disabled = false;
+  selectedLabel = "";
+  actionIcon = "";
+  actionLabel = "";
   private open = false;
 
   private outsidePointer = (event: PointerEvent) => {
@@ -65,6 +71,16 @@ export class IcSelectField extends LitElement {
       opacity:.75;
       transition:transform var(--en-motion-fast,180ms) var(--en-easing-standard,ease);
     }
+    .trigger.has-action { padding-right:68px; }
+    .trigger.has-action > ha-icon { position:absolute; right:14px; }
+    .action {
+      position:absolute; z-index:1; top:50%; right:38px; display:grid; width:28px; height:28px;
+      place-items:center; padding:0; border:0; border-radius:8px; transform:translateY(-50%);
+      background:transparent; color:var(--en-text-secondary,var(--secondary-text-color)); cursor:pointer;
+    }
+    .action:hover { background:var(--ic-action-hover-background,var(--en-surface-control)); color:var(--en-text-primary,var(--primary-text-color)); }
+    .action:focus-visible { outline:2px solid var(--en-color-primary); outline-offset:-2px; }
+    .action ha-icon { width:16px; height:16px; --mdc-icon-size:16px; }
     .trigger[aria-expanded="true"] ha-icon { transform:rotate(180deg); }
     .options {
       position:absolute; z-index:30; top:calc(100% + 6px); left:0; right:0;
@@ -108,20 +124,26 @@ export class IcSelectField extends LitElement {
     this.requestUpdate();
   }
 
+  private runAction(event:MouseEvent) {
+    event.stopPropagation();
+    this.dispatchEvent(new CustomEvent("select-action",{ bubbles:true,composed:true }));
+  }
+
   render() {
     return html`
       <div class="field">
-        <button class="trigger" type="button" ?disabled=${this.disabled}
+        <button class="trigger ${this.actionIcon?"has-action":""}" type="button" ?disabled=${this.disabled}
           aria-haspopup="listbox" aria-expanded=${this.open}
           @click=${this.toggle}
           @keydown=${(event:KeyboardEvent) => {
             if (event.key === "Escape") this.close();
           }}>
           <span class="value">${
-            this.options.find((option) => option.value === this.value)?.label ?? this.value
+            this.selectedLabel || this.options.find((option) => option.value === this.value)?.label || this.value
           }</span>
           <ha-icon icon="mdi:chevron-down" aria-hidden="true"></ha-icon>
         </button>
+        ${this.actionIcon ? html`<button class="action" type="button" title=${this.actionLabel} aria-label=${this.actionLabel} @click=${this.runAction}><ha-icon .icon=${this.actionIcon}></ha-icon></button>` : null}
         ${this.open ? html`
           <ic-scroll-area class="options" role="listbox">
             ${this.options

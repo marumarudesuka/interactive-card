@@ -7,12 +7,14 @@ import type {
 } from "../types/trend";
 import { TrendSamplingCache } from "./trend-sampling-resolver.ts";
 import { resolveTrendAxes } from "./trend-axis-resolver.ts";
-import { createTrendAxes } from "./trend-transformer.ts";
+import { createTrendHoverTimestampIndex } from "./trend-chart-geometry.ts";
 
 export interface PreparedTrendChartData {
   series: TrendSeries[];
   axes: ResolvedTrendAxis[];
+  hoverTimestamps: number[];
   excludedAxisCount: number;
+  excludedSeries: TrendSeries[];
 }
 
 export class TrendChartModelCache {
@@ -25,7 +27,9 @@ export class TrendChartModelCache {
   private prepared: PreparedTrendChartData = {
     series: [],
     axes: [],
+    hoverTimestamps: [],
     excludedAxisCount: 0,
+    excludedSeries: [],
   };
 
   resolve(
@@ -57,8 +61,7 @@ export class TrendChartModelCache {
           item.renderMode ?? renderMode
         ),
       }));
-    const calculatedAxes = createTrendAxes(visibleSeries);
-    const selectedAxes = calculatedAxes.slice(0, 2);
+    const selectedAxes = axes.slice(0, 2);
     const selectedAxisIds = new Set(
       selectedAxes.map((axis) => axis.id)
     );
@@ -69,6 +72,9 @@ export class TrendChartModelCache {
         axisGroup:selectedAxes.find((axis) => axis.id === item.axisId)
           ?.axisGroup,
       }));
+    const excludedSeries = visibleSeries.filter(
+      (item) => !selectedAxisIds.has(item.axisId)
+    );
     this.sourceSeries = series;
     this.sourceAxes = axes;
     this.hiddenKey = hiddenKey;
@@ -79,7 +85,9 @@ export class TrendChartModelCache {
       axes: resolveTrendAxes(
         selectedAxes.length ? selectedAxes : axes.slice(0, 2)
       ),
-      excludedAxisCount: Math.max(0, calculatedAxes.length - 2),
+      hoverTimestamps:createTrendHoverTimestampIndex(drawableSeries),
+      excludedAxisCount: Math.max(0, axes.length - 2),
+      excludedSeries,
     };
     return this.prepared;
   }

@@ -25,6 +25,9 @@ export function normalizeEnergyKpiSectionConfig(
   return {
     title: "Energy Overview",
     ...config,
+    cardHeight:typeof config.cardHeight === "number" && Number.isFinite(config.cardHeight)
+      ? Math.max(130, Math.min(240, Math.round(config.cardHeight)))
+      : undefined,
     cards,
   };
 }

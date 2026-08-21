@@ -12,6 +12,7 @@ interface MergeRecord {
   origin: KpiConfigOrigin;
   templateId?: string;
   entityLocked: boolean;
+  configuredEntity?: string;
 }
 
 function isConfiguredValue(value: unknown): boolean {
@@ -142,6 +143,8 @@ function mergeSource(
           ? { ...card, entity: undefined }
           : card;
       existing.config = mergeConfigLayers(existing.config, sourceCard);
+      existing.configuredEntity =
+        configuredString(sourceCard.entity) ?? existing.configuredEntity;
       existing.origin = origin;
       existing.entityLocked ||= entityLocked;
       return;
@@ -152,6 +155,7 @@ function mergeSource(
       config: mergeConfigLayers(card),
       origin,
       entityLocked,
+      configuredEntity: configuredString(card.entity),
     });
   });
 }
@@ -209,6 +213,7 @@ export function mergeKpiConfigSources(
     origin: "template",
     templateId: template.id,
     entityLocked: false,
+    configuredEntity: undefined,
   }));
 
   mergeSource(records, sources.repositoryCards ?? [], "repository");
@@ -217,11 +222,11 @@ export function mergeKpiConfigSources(
   return records.map((record) => {
     let config = mergeConfigLayers(record.config);
 
-    if (!configuredString(config.entity)) {
-      const discoveredEntity = getDiscoveryEntity(record, sources.discovery);
-      if (discoveredEntity) {
-        config = mergeConfigLayers(config, { entity: discoveredEntity });
-      }
+    const resolvedEntity = record.configuredEntity ??
+      getDiscoveryEntity(record, sources.discovery) ??
+      configuredString(config.entity);
+    if (resolvedEntity) {
+      config = mergeConfigLayers(config, { entity: resolvedEntity });
     }
 
     return {

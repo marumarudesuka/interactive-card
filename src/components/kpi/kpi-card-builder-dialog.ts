@@ -41,6 +41,7 @@ export class KpiCardBuilderDialog extends LitElement {
     hass: { attribute: false },
     draft: { attribute: false },
     existingIds: { attribute: false },
+    canDelete: { type: Boolean, attribute: "can-delete" },
     deleteConfirmOpen: { state: true },
   };
 
@@ -49,6 +50,7 @@ export class KpiCardBuilderDialog extends LitElement {
   hass?: HomeAssistant;
   draft: KpiCardDraft = {};
   existingIds: string[] = [];
+  canDelete = true;
   private deleteConfirmOpen = false;
 
   private formDraft: KpiCardDraft = {};
@@ -411,6 +413,14 @@ export class KpiCardBuilderDialog extends LitElement {
             </div>
           </div>
 
+          <details class="section">
+            <summary class="section-title">Advanced</summary>
+            <ic-field label="Category" .value=${normalized.category ?? ""}
+              placeholder="Optional metric category"
+              @field-input=${(event:CustomEvent<FieldValueDetail>) =>
+                this.updateField("category",event.detail.value)}></ic-field>
+          </details>
+
           <div class="section preview">
             <div class="section-title">Preview</div>
             <energy-kpi-card
@@ -427,10 +437,10 @@ export class KpiCardBuilderDialog extends LitElement {
         </div>
 
         <ic-dialog-footer slot="footer">
-          ${this.mode === "edit"
+          ${this.mode === "edit" && this.canDelete
             ? html`
                 <ic-button slot="leading" variant="destructive" @click=${this.requestDeleteConfirmation}>
-                  Delete
+                  Remove card
                 </ic-button>
               `
             : null}
@@ -442,9 +452,9 @@ export class KpiCardBuilderDialog extends LitElement {
       </ic-app-dialog>
       <ic-confirm-dialog
         .open=${this.deleteConfirmOpen}
-        title="Delete KPI Card?"
-        message="This card will be removed from the dashboard."
-        confirm-label="Delete"
+        title="Remove card?"
+        message="Remove this card from the KPI section?"
+        confirm-label="Remove"
         @confirm-cancel=${() => { this.deleteConfirmOpen = false; }}
         @confirm-accept=${this.requestDelete}
       ></ic-confirm-dialog>

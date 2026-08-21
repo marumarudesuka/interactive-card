@@ -3,34 +3,44 @@ import type { HomeAssistant } from "custom-card-helpers";
 
 import { defaultCircuitConfigs } from "../data/circuit-config";
 import { resolveActiveCircuits } from "../helpers/circuit-utils";
-import { CircuitConfigCoordinator } from "../config/circuit-config-coordinator";
-import { LocalStorageCircuitConfigRepository } from "../repositories/local-storage-circuit-config-repository";
+import {
+  getCircuitStaticColumnCount,
+  planCircuitCarouselAlignment,
+} from "../helpers/circuit-carousel-layout.ts";
+import {
+  getPendingCircuitScope,
+  loadPendingCircuitsForConfig,
+  LocalStoragePendingCircuitRepository,
+} from "../repositories/local-storage-pending-circuit-repository.ts";
 import type {
   CircuitConfig,
   CircuitConfigInput,
   EnergyCircuitSectionConfig,
 } from "../types/circuit";
 import type { CircuitConfigChangedDetail } from "./circuit/circuit-settings-modal";
-import type { CircuitDeleteRequestDetail } from "./circuit/circuit-settings-modal";
-import type { CircuitSelectedDetail } from "./circuit/circuit-card";
+import type { CircuitDetailRequest } from "./circuit/circuit-card";
+import type { ResolvedCircuit } from "../types/circuit";
 import { energyGridStyle } from "../styles/energy-grid";
+import { discoverEnergyMetrics, getCircuitDiscoveryCandidates } from "../discovery/discovery-consumers.ts";
+import type { DiscoveredMetric } from "../discovery/discovery.types";
 import "./common/section-header";
 import "./circuit/circuit-add-card";
 import "./circuit/circuit-card";
+import "./circuit/circuit-detail-panel";
 import "./circuit/circuit-settings-modal";
+import "../editors/energy-circuit-section-editor.ts";
 
 function createCircuitId(): string {
   const randomId = globalThis.crypto?.randomUUID?.();
   if (randomId) return `circuit-${randomId}`;
-
-  return [
-    "circuit",
-    Date.now().toString(36),
-    Math.random().toString(36).slice(2, 10),
-  ].join("-");
+  return `circuit-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 export class EnergyCircuitSection extends LitElement {
+  static getConfigElement() {
+    return document.createElement("energy-circuit-section-editor");
+  }
+
   static properties = {
     config: { attribute: false },
   };
@@ -41,14 +51,14 @@ export class EnergyCircuitSection extends LitElement {
   };
 
   private _hass?: HomeAssistant;
-  private readonly repository = new LocalStorageCircuitConfigRepository();
-  private readonly coordinator = new CircuitConfigCoordinator(this.repository);
+  private discoveryMetrics: readonly DiscoveredMetric[] = [];
+  private readonly pendingRepository = new LocalStoragePendingCircuitRepository();
   private baseCircuits: CircuitConfig[] = [];
   private resolvedCircuits: CircuitConfig[] = [];
-  private resolutionVersion = 0;
-  private visibleCount = 4;
+  private visibleCount:1 | 2 | 4 = 4;
   private trackCardWidth = 0;
   private trackStep = 0;
+  private trackGap = 16;
   private settledIndex = 0;
   private canScrollPrevious = false;
   private canScrollNext = false;
@@ -58,13 +68,19 @@ export class EnergyCircuitSection extends LitElement {
   private dragged = false;
   private scrollSettleTimer?: number;
   private resizeObserver?: ResizeObserver;
+  private carouselAligned = true;
+  private synchronizingCarousel = false;
+  private alignmentVersion = 0;
   private builderOpen = false;
   private builderDraft?: CircuitConfig;
-  private selectedCircuit?: CircuitConfig;
-  private circuitDialogOpen = false;
+  private pendingCircuits: CircuitConfig[] = [];
+  private pendingScope = "active-circuits";
+  private pendingResolutionVersion = 0;
+  private detailCircuit?: ResolvedCircuit;
 
   set hass(hass: HomeAssistant) {
     this._hass = hass;
+    this.discoveryMetrics = discoverEnergyMetrics(hass);
     this.requestUpdate();
   }
 
@@ -78,13 +94,18 @@ export class EnergyCircuitSection extends LitElement {
     }
 
     const circuits = this.normalizeCircuits(config.circuits);
+    const configuredHeight = Number(config.cardHeight);
     this.baseCircuits = circuits;
     this.resolvedCircuits = circuits;
     this.config = {
       ...config,
       title: config.title?.trim() || "Active Circuits",
+      cardHeight: Number.isFinite(configuredHeight)
+        ? Math.max(120, Math.min(240, Math.round(configuredHeight)))
+        : undefined,
       circuits,
     };
+    this.pendingScope = getPendingCircuitScope(this.config);
     void this.resolveUserConfig();
   }
 
@@ -193,10 +214,6 @@ export class EnergyCircuitSection extends LitElement {
       min-width:0;
     }
 
-    ic-circuit-card {
-      --circuit-card-height: 150px;
-    }
-
     .navigation {
       position: absolute;
       z-index: 20;
@@ -252,32 +269,15 @@ export class EnergyCircuitSection extends LitElement {
       }
     }
 
-    ic-circuit-add-card {
-      --circuit-card-height: 150px;
-    }
-
-    @container (max-width: 1200px) {
-      .carousel-shell.static-grid .track {
-        --static-circuit-columns: 3;
-      }
-    }
-
-    @container (max-width: 599px) {
-      .carousel-shell.static-grid .track {
-        --static-circuit-columns: 1;
-      }
-      .track {
-        --circuit-grid-gap: 10px;
-      }
-    }
-
   `];
 
   protected firstUpdated() {
     this.resizeObserver = new ResizeObserver((entries) => {
       const width = entries[0]?.contentRect.width ?? 0;
-      const nextVisibleCount = width > 1200 ? 4 : width > 599 ? 3 : 1;
-      const gap = width <= 599 ? 10 : 16;
+      const previousVisibleCount = this.visibleCount;
+      const previousUsesCarousel = this.getItemCount() > previousVisibleCount;
+      const nextVisibleCount = this.resolveVisibleCount(width);
+      const gap = nextVisibleCount === 1 ? 10 : 16;
       const cardWidth =
         (width - gap * (nextVisibleCount - 1)) /
         nextVisibleCount;
@@ -285,20 +285,77 @@ export class EnergyCircuitSection extends LitElement {
       const countChanged = nextVisibleCount !== this.visibleCount;
       const stepChanged = Math.abs(nextTrackStep - this.trackStep) > 0.5;
       if (!countChanged && !stepChanged) return;
+      const itemCount = this.getItemCount();
+      const nextUsesCarousel = itemCount > nextVisibleCount;
+      const alignment = planCircuitCarouselAlignment({
+        previousVisibleCount,
+        nextVisibleCount,
+        previousUsesCarousel,
+        nextUsesCarousel,
+        settledIndex:this.settledIndex,
+        itemCount,
+        nextTrackStep,
+      });
       this.visibleCount = nextVisibleCount;
       this.trackCardWidth = Math.max(0, cardWidth);
       this.trackStep = nextTrackStep;
-      this.requestUpdate();
-      void this.updateComplete.then(() => this.syncNavigationState());
+      this.trackGap = gap;
+      this.scheduleCarouselAlignment(alignment.settledIndex,alignment.scrollLeft,alignment.reset);
     });
     this.resizeObserver.observe(this);
   }
 
+  private getItemCount(circuits = this.resolvedCircuits):number {
+    return circuits.filter((item) => item.enabled !== false).length + 1;
+  }
+
+  private clearScrollSettle() {
+    if (this.scrollSettleTimer === undefined) return;
+    window.clearTimeout(this.scrollSettleTimer);
+    this.scrollSettleTimer = undefined;
+  }
+
+  private scheduleCarouselAlignment(
+    settledIndex:number,
+    scrollLeft:number,
+    reset:boolean
+  ) {
+    const version = ++this.alignmentVersion;
+    this.clearScrollSettle();
+    this.synchronizingCarousel = true;
+    this.carouselAligned = false;
+    this.settledIndex = settledIndex;
+    if (reset) {
+      this.canScrollPrevious = false;
+    }
+    this.requestUpdate();
+    void this.updateComplete.then(() => {
+      if (version !== this.alignmentVersion) return;
+      const viewport = this.viewport;
+      if (viewport) {
+        viewport.classList.remove("dragging","interacting");
+        viewport.scrollLeft = scrollLeft;
+      }
+      this.carouselAligned = true;
+      this.synchronizingCarousel = false;
+      this.requestUpdate();
+      void this.updateComplete.then(() => this.syncNavigationState());
+    });
+  }
+
+  private resolveVisibleCount(width:number):1 | 2 | 4 {
+    const mobile = 600;
+    const desktop = 1024;
+    const hysteresis = 12;
+    if (this.visibleCount === 1 && width < mobile + hysteresis) return 1;
+    if (this.visibleCount === 2 && width >= mobile - hysteresis && width < desktop + hysteresis) return 2;
+    if (this.visibleCount === 4 && width >= desktop - hysteresis) return 4;
+    return width >= desktop ? 4 : width >= mobile ? 2 : 1;
+  }
+
   disconnectedCallback() {
     this.resizeObserver?.disconnect();
-    if (this.scrollSettleTimer !== undefined) {
-      window.clearTimeout(this.scrollSettleTimer);
-    }
+    this.clearScrollSettle();
     super.disconnectedCallback();
   }
 
@@ -335,6 +392,7 @@ export class EnergyCircuitSection extends LitElement {
   }
 
   private scheduleScrollSettle() {
+    if (this.synchronizingCarousel || !this.carouselAligned) return;
     const viewport = this.viewport;
     if (!viewport || !this.trackStep) return;
     viewport.classList.add("interacting");
@@ -367,6 +425,12 @@ export class EnergyCircuitSection extends LitElement {
     this.canScrollPrevious = previous;
     this.canScrollNext = next;
     this.requestUpdate();
+  }
+
+  private handleViewportScroll() {
+    if (this.synchronizingCarousel || !this.carouselAligned) return;
+    this.syncNavigationState();
+    this.scheduleScrollSettle();
   }
 
   private handlePointerDown(event: PointerEvent) {
@@ -412,92 +476,106 @@ export class EnergyCircuitSection extends LitElement {
 
   private openBuilder() {
     this.builderDraft = {
-      id: createCircuitId(),
-      name: "",
-      entity: "",
-      icon: "mdi:electric-switch",
-      enabled: true,
-      order: this.resolvedCircuits.length,
+      id:createCircuitId(),
+      name:"",
+      entity:"",
+      icon:"mdi:electric-switch",
+      category:"",
+      enabled:true,
+      order:this.baseCircuits.length + this.pendingCircuits.length,
     };
     this.builderOpen = true;
     this.requestUpdate();
   }
 
-  private openCircuitSettings(event: CustomEvent<CircuitSelectedDetail>) {
+  private async handlePendingCircuitCreated(
+    event: CustomEvent<CircuitConfigChangedDetail>
+  ) {
     event.stopPropagation();
-    const circuit = event.detail.circuit.config;
-    this.selectedCircuit = { ...circuit };
-    this.circuitDialogOpen = true;
-    console.debug("[CircuitSettings] dialog opened", circuit.id);
-    this.requestUpdate();
+    try {
+      const circuit = { ...event.detail.circuit };
+      const duplicate = [...this.baseCircuits, ...this.pendingCircuits].some(
+        (item) => item.id === circuit.id || item.entity === circuit.entity
+      );
+      if (duplicate) {
+        event.detail.fail?.();
+        return;
+      }
+      const added = await this.pendingRepository.add(this.pendingScope, circuit);
+      if (!added) {
+        event.detail.fail?.();
+        return;
+      }
+      this.builderOpen = false;
+      this.builderDraft = undefined;
+      await this.resolveUserConfig();
+      event.detail.complete?.();
+    } catch (error) {
+      event.detail.fail?.();
+      console.error("[energy-circuit-section] Unable to save pending Circuit", error);
+    }
   }
 
-  private closeCircuitSettings() {
-    this.circuitDialogOpen = false;
-    this.selectedCircuit = undefined;
+  private async handlePendingCircuitDelete(
+    event:CustomEvent<{ circuitId:string }>
+  ) {
+    event.stopPropagation();
+    await this.pendingRepository.remove(this.pendingScope, event.detail.circuitId);
+    this.detailCircuit = undefined;
+    await this.resolveUserConfig();
+  }
+
+  private openCircuitDetail(event: CustomEvent<CircuitDetailRequest>) {
+    event.stopPropagation();
+    this.detailCircuit = event.detail.circuit;
     this.requestUpdate();
   }
 
   private async resolveUserConfig() {
-    const version = ++this.resolutionVersion;
-    const circuits = await this.coordinator.resolve(this.baseCircuits);
-    if (version !== this.resolutionVersion) return;
-    this.resolvedCircuits = circuits;
-    this.requestUpdate();
-    await this.updateComplete;
-    this.syncNavigationState();
-  }
-
-  private async handleCircuitConfigChanged(
-    event: CustomEvent<CircuitConfigChangedDetail>
-  ) {
-    try {
-      const circuits = await this.coordinator.update(
-        this.baseCircuits,
-        event.detail.circuit
-      );
-      this.resolvedCircuits = circuits;
-      this.config = { ...this.config, circuits };
-      this.builderOpen = false;
-      this.requestUpdate();
-      await this.updateComplete;
-      this.syncNavigationState();
-      event.detail.complete?.();
-      this.dispatchEvent(new CustomEvent("config-changed", {
-        detail: { config: this.config },
-        bubbles: true,
-        composed: true,
-      }));
-    } catch (error) {
-      event.detail.fail?.();
-      console.error("[energy-circuit-section] Unable to save circuit", error);
+    const pendingVersion = ++this.pendingResolutionVersion;
+    const scope = this.pendingScope;
+    const circuits = this.baseCircuits.map((circuit) => ({ ...circuit }));
+    const pendingResult = await loadPendingCircuitsForConfig(
+      this.pendingRepository,
+      this.config
+    );
+    const storedPending = pendingResult.circuits;
+    if (
+      pendingVersion !== this.pendingResolutionVersion ||
+      scope !== this.pendingScope || pendingResult.scope !== scope
+    ) return;
+    const configuredIds = new Set(circuits.map((circuit) => circuit.id));
+    const configuredEntities = new Set(circuits.map((circuit) => circuit.entity));
+    this.pendingCircuits = storedPending.filter(
+      (circuit) => !configuredIds.has(circuit.id) &&
+        !configuredEntities.has(circuit.entity)
+    ).map((circuit, index) => ({
+      ...circuit,
+      order:circuits.length + index,
+    }));
+    if (this.pendingCircuits.length !== storedPending.length) {
+      await this.pendingRepository.save(scope, this.pendingCircuits);
     }
-  }
-
-  private async handleCircuitDeleteRequest(
-    event: CustomEvent<CircuitDeleteRequestDetail>
-  ) {
-    try {
-      const circuitId = event.detail.circuitId;
-      const circuits = await this.coordinator.remove(
-        this.baseCircuits,
-        circuitId
+    const previousItemCount = this.getItemCount();
+    const previousUsesCarousel = previousItemCount > this.visibleCount;
+    this.resolvedCircuits = [...circuits, ...this.pendingCircuits];
+    const itemCount = this.getItemCount();
+    const nextUsesCarousel = itemCount > this.visibleCount;
+    if (previousUsesCarousel !== nextUsesCarousel) {
+      this.scheduleCarouselAlignment(0,0,true);
+    } else {
+      const alignment = planCircuitCarouselAlignment({
+        previousVisibleCount:this.visibleCount,
+        nextVisibleCount:this.visibleCount,
+        previousUsesCarousel,
+        nextUsesCarousel,
+        settledIndex:this.settledIndex,
+        itemCount,
+        nextTrackStep:this.trackStep,
+      });
+      this.scheduleCarouselAlignment(
+        alignment.settledIndex,alignment.scrollLeft,alignment.reset
       );
-      this.baseCircuits = circuits;
-      this.resolvedCircuits = circuits;
-      this.config = { ...this.config, circuits };
-      this.requestUpdate();
-      await this.updateComplete;
-      this.syncNavigationState();
-      event.detail.complete?.();
-      this.dispatchEvent(new CustomEvent("config-changed", {
-        detail: { config: this.config },
-        bubbles: true,
-        composed: true,
-      }));
-    } catch (error) {
-      event.detail.fail?.();
-      console.error("[energy-circuit-section] Unable to delete circuit", error);
     }
   }
 
@@ -512,7 +590,7 @@ export class EnergyCircuitSection extends LitElement {
     );
     const itemCount = circuits.length + 1;
     const usesCarousel = itemCount > this.visibleCount;
-    const staticColumns = Math.min(itemCount, this.visibleCount);
+    const staticColumns = getCircuitStaticColumnCount(this.visibleCount);
     return html`
       <ic-section-header
         .title=${this.config.title ?? "Active Circuits"}
@@ -521,10 +599,7 @@ export class EnergyCircuitSection extends LitElement {
 
       <div class="carousel-shell ${usesCarousel ? "" : "static-grid"}">
         <div class="carousel-viewport active-circuits-viewport"
-            @scroll=${usesCarousel ? () => {
-              this.syncNavigationState();
-              this.scheduleScrollSettle();
-            } : undefined}
+            @scroll=${usesCarousel ? this.handleViewportScroll : undefined}
             @pointerdown=${usesCarousel ? this.handlePointerDown : undefined}
             @pointermove=${usesCarousel ? this.handlePointerMove : undefined}
             @pointerup=${usesCarousel ? this.handlePointerEnd : undefined}
@@ -533,28 +608,24 @@ export class EnergyCircuitSection extends LitElement {
           <div
             class="track active-circuits-track"
             style=${usesCarousel && this.trackCardWidth > 0
-              ? `--track-card-width:${this.trackCardWidth}px`
-              : `--static-circuit-columns:${staticColumns}`}
+              ? `--track-card-width:${this.trackCardWidth}px;--circuit-grid-gap:${this.trackGap}px;--circuit-card-height:${this.config.cardHeight ?? 150}px`
+              : `--static-circuit-columns:${staticColumns};--circuit-grid-gap:${this.trackGap}px;--circuit-card-height:${this.config.cardHeight ?? 150}px`}
           >
               ${circuits.map((circuit, index) => html`
                 <div class="carousel-item ${
-                  usesCarousel &&
+                  usesCarousel && this.carouselAligned &&
                   (index < pageStart || index >= pageStart + this.visibleCount)
                     ? "outside-page" : ""
                 }">
                   <ic-circuit-card
                     .circuit=${circuit}
                     .hass=${this._hass}
-                    .selected=${this.circuitDialogOpen &&
-                      this.selectedCircuit?.id === circuit.config.id}
-                    @circuit-selected=${this.openCircuitSettings}
-                    @circuit-config-changed=${this.handleCircuitConfigChanged}
-                    @circuit-delete-request=${this.handleCircuitDeleteRequest}
+                    @circuit-detail-request=${this.openCircuitDetail}
                   ></ic-circuit-card>
                 </div>
               `)}
               <div class="carousel-item ${
-                usesCarousel && (
+                usesCarousel && this.carouselAligned && (
                   circuits.length < pageStart ||
                   circuits.length >= pageStart + this.visibleCount)
                     ? "outside-page" : ""
@@ -592,26 +663,36 @@ export class EnergyCircuitSection extends LitElement {
       </div>
 
       <ic-circuit-settings-modal
-        .open=${this.circuitDialogOpen}
-        .hass=${this._hass}
-        .circuit=${this.selectedCircuit}
-        mode="edit"
-        @circuit-settings-close=${this.closeCircuitSettings}
-        @circuit-config-changed=${this.handleCircuitConfigChanged}
-        @circuit-delete-request=${this.handleCircuitDeleteRequest}
-      ></ic-circuit-settings-modal>
-
-      <ic-circuit-settings-modal
         .open=${this.builderOpen}
         .hass=${this._hass}
         .circuit=${this.builderDraft}
+        .discoveredMetrics=${getCircuitDiscoveryCandidates(
+          this.discoveryMetrics,
+          this.builderDraft?.entity
+        )}
         mode="create"
         @circuit-settings-close=${() => {
           this.builderOpen = false;
+          this.builderDraft = undefined;
           this.requestUpdate();
         }}
-        @circuit-config-changed=${this.handleCircuitConfigChanged}
+        @circuit-config-changed=${this.handlePendingCircuitCreated}
       ></ic-circuit-settings-modal>
+
+      <ic-circuit-detail-panel
+        .open=${Boolean(this.detailCircuit)}
+        .hass=${this._hass}
+        .circuit=${this.detailCircuit}
+        .pending=${Boolean(this.detailCircuit && this.pendingCircuits.some(
+          (circuit) => circuit.id === this.detailCircuit?.config.id
+        ))}
+        @circuit-detail-close=${() => {
+          this.detailCircuit = undefined;
+          this.requestUpdate();
+        }}
+        @pending-circuit-delete-request=${this.handlePendingCircuitDelete}
+      ></ic-circuit-detail-panel>
+
     `;
   }
 }

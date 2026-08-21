@@ -32,7 +32,7 @@ export class TrendLegend extends LitElement {
       padding: 3px 0;
       border: none;
       background: transparent;
-      color: var(--secondary-text-color);
+      color: var(--en-text-primary, var(--primary-text-color));
       cursor: pointer;
       font: inherit;
       font-size: 14px;
@@ -47,6 +47,7 @@ export class TrendLegend extends LitElement {
     }
 
     button.hidden {
+      color: var(--en-text-secondary, var(--secondary-text-color));
       opacity: 0.45;
       text-decoration: line-through;
     }
@@ -54,6 +55,7 @@ export class TrendLegend extends LitElement {
     .dot {
       width: 10px;
       height: 10px;
+      flex: 0 0 10px;
       border-radius: 50%;
     }
   `;
@@ -84,7 +86,7 @@ export class TrendLegend extends LitElement {
           >
             <span
               class="dot"
-              style=${`background:${getTrendSeriesColor(item.color, index)}`}
+              style=${`background:${getTrendSeriesColor(item.color, index, item.id)}`}
             ></span>
             ${item.name}${unit ? ` · ${unit}` : ""}
           </button>

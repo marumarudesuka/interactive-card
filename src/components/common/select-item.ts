@@ -113,7 +113,7 @@ export class IcSelectItem extends LitElement {
       height:16px;
       align-items:center;
       justify-content:center;
-      color:var(--en-text-secondary,var(--secondary-text-color));
+      color:var(--ic-select-indicator-color,var(--en-text-secondary,var(--secondary-text-color)));
       transform:var(--ic-select-indicator-transform,none);
     }
     ha-icon {

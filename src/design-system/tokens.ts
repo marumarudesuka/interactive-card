@@ -29,12 +29,12 @@ export function getDesignTokenDeclarations(): string {
     --en-color-warning:var(--en-color-accent);
     --en-color-selected:var(--en-color-primary);
     --en-color-focus:var(--en-color-primary);
-    --en-color-series-1:var(--en-color-primary);
-    --en-color-series-2:var(--en-color-accent);
-    --en-color-series-3:var(--en-color-success);
-    --en-color-series-4:color-mix(in srgb,var(--en-color-primary) 80%,#fff);
-    --en-color-series-5:color-mix(in srgb,var(--en-color-accent) 80%,#fff);
-    --en-color-series-6:color-mix(in srgb,var(--en-color-success) 80%,#fff);
+    --en-color-series-1:var(--en-color-primary,#444D9E);
+    --en-color-series-2:var(--en-color-accent,#FBB03B);
+    --en-color-series-3:var(--en-color-success,#8CC34B);
+    --en-color-series-4:#6971B1;
+    --en-color-series-5:#FCC063;
+    --en-color-series-6:#A3CF6F;
     --en-space-xs:${spacing.xs};
     --en-space-sm:${spacing.sm};
     --en-space-md:${spacing.md};

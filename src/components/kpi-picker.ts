@@ -13,15 +13,20 @@ export class KpiPicker extends LitElement {
     items: { type: Array },
     customItems: { type: Array },
     selectedItems: { type: Array },
-    hass: { type: Object }
+    hass: { type: Object },
+    quickView: { type: Boolean },
   };
 
   items:any[] = [];
   customItems:any[] = [];
   selectedItems:string[] = [];
   hass:any;
+  quickView = false;
   private _toggleKpiLocal(item:any){
-    this.dispatchEvent(new CustomEvent('toggle-kpi',{detail:item,bubbles:true,composed:true}));
+    this.dispatchEvent(new CustomEvent(
+      this.quickView ? 'quick-toggle-kpi' : 'toggle-kpi',
+      {detail:item,bubbles:true,composed:true}
+    ));
   }
 
   private _createCustomKpi(){
@@ -37,6 +42,10 @@ export class KpiPicker extends LitElement {
   }
 
   private _toggleItem(item:any){
+    if(this.quickView){
+      this._toggleKpiLocal(item);
+      return;
+    }
     if(item?.type === "custom" || item?.id?.startsWith("custom-")){
       this._toggleCustomKpi(item);
       return;
@@ -156,7 +165,7 @@ export class KpiPicker extends LitElement {
           </div>
         `) : html`<div class="empty">No active cards yet.</div>`}
 
-        <div class="section-title">Available Cards</div>
+        <div class="section-title">${this.quickView ? "Temporarily Hidden" : "Available Cards"}</div>
         ${inactiveItems.length ? inactiveItems.map((item:any) => html`
           <div style="display:flex;align-items:center;gap:8px">
             <div style="flex:1;" @click=${()=>this._toggleItem(item)}>
@@ -168,7 +177,7 @@ export class KpiPicker extends LitElement {
           </div>
         `) : html`<div class="empty">All cards are enabled.</div>`}
 
-        <div class="section-title">Custom cards</div>
+        ${this.quickView ? null : html`<div class="section-title">Custom cards</div>
         ${this.customItems.length ? this.customItems.map((item:any) => html`
           <kpi-item
             .item=${{
@@ -202,7 +211,7 @@ export class KpiPicker extends LitElement {
           tone="primary"
           indicator="plus"
           @click=${this._createCustomKpi}
-        >Create Custom KPI</ic-menu-item>
+        >Create Custom KPI</ic-menu-item>`}
 
       </ic-action-menu>
     `;

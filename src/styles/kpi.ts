@@ -12,20 +12,25 @@ export const kpiStyle = css`
   }
 
   .kpi-copy {
-    display: flex;
+    display: grid;
     min-width: 0;
     height: 100%;
-    flex-direction: column;
-    align-items: flex-start;
-    justify-content: center;
+    grid-template-rows: auto auto var(--kpi-subtitle-slot-height, 23px);
+    grid-template-areas:
+      "title"
+      "value"
+      "footer";
+    align-content: center;
+    align-items: start;
     grid-column: 1;
     grid-row: 1;
   }
 
   .name {
+    grid-area: title;
     justify-self: start;
     align-self: flex-start;
-    margin-bottom: 4px;
+    margin-bottom: var(--kpi-title-gap, 4px);
     transform: translateY(-5px);
     color: var(--en-surface-text-primary, var(--en-heading-primary, var(--primary-text-color)));
     min-width: 0;
@@ -40,6 +45,7 @@ export const kpiStyle = css`
 
   ic-metric-value {
     display: flex;
+    grid-area: value;
     height: auto;
     align-items: baseline;
     --metric-value-size: var(--kpi-value-size, 36px);
@@ -55,11 +61,9 @@ export const kpiStyle = css`
   }
 
   ic-trend-indicator {
-    align-self: start;
     min-width: 0;
     max-width: 100%;
     overflow: hidden;
-    margin-top: 6px;
     color: var(--en-surface-text-secondary, var(--en-subtitle-secondary, var(--secondary-text-color)));
     --trend-indicator-size: var(--en-helper-size, 13px);
     --trend-indicator-weight: var(--en-helper-weight, 400);
@@ -69,6 +73,18 @@ export const kpiStyle = css`
     --trend-positive-color: var(--en-color-success);
     --trend-negative-color: #ff3b30;
     white-space: nowrap;
+  }
+
+  .subtitle-slot {
+    display: flex;
+    grid-area: footer;
+    width: 100%;
+    min-width: 0;
+    height: var(--kpi-subtitle-slot-height, 23px);
+    box-sizing: border-box;
+    align-items: flex-start;
+    overflow: hidden;
+    padding-top: var(--kpi-subtitle-padding-top, 6px);
   }
 
   ic-icon-badge {

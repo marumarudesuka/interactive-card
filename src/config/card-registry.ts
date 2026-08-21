@@ -17,6 +17,7 @@ export const energyCardRegistry: readonly CardDefinition[] = Object.freeze([
   { id:"insight", title:"Energy Insight", category:"analytics", icon:"mdi:lightbulb-on-outline", component:"energy-insight-card" },
   { id:"theme-selector", title:"Energy Theme Selector", category:"settings", icon:"mdi:palette", component:"energy-theme-selector" },
   { id:"energy-settings", title:"Energy Settings", category:"settings", icon:"mdi:cog-outline", component:"energy-settings-card" },
+  { id:"energy-automation-section", title:"Automation Scenarios", category:"automation", icon:"mdi:robot-outline", component:"energy-automation-section" },
 ]);
 
 export function getCardDefinition(id: string): CardDefinition | undefined {
