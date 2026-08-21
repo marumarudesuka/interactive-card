@@ -48,6 +48,8 @@ export interface CardThemeTokens {
   statusSuccess: string;
   statusSuccessSurface: string;
   statusSuccessBorder: string;
+  statusNeutralSurface: string;
+  statusNeutralBorder: string;
   iconBadgeBackground: string;
   iconBadgeHoverBackground: string;
   iconBadgeBrandStrength: string;
@@ -78,7 +80,7 @@ export function getCardThemeStyles(
     case "native":
       return {
         surfacePrimary: "var(--ha-card-background, var(--card-background-color))",
-        surfaceSecondary: "var(--secondary-background-color, var(--ha-card-background))",
+        surfaceSecondary: "color-mix(in srgb, var(--primary-text-color) 6%, transparent)",
         surfaceFloating: "var(--ha-card-background, var(--card-background-color))",
         surfaceCardBackground: "var(--ha-card-background, var(--card-background-color))",
         surfaceTextPrimary: "var(--primary-text-color)",
@@ -99,9 +101,9 @@ export function getCardThemeStyles(
         popoverBorder: "1px solid var(--divider-color)",
         popoverShadow: "0 12px 32px rgba(0,0,0,.18)",
         popoverBlur: "none",
-        controlBackground: "var(--secondary-background-color, var(--ha-card-background))",
+        controlBackground: "color-mix(in srgb, var(--primary-text-color) 6%, transparent)",
         controlBorder: "1px solid var(--divider-color)",
-        actionBackground: "var(--secondary-background-color, var(--ha-card-background))",
+        actionBackground: "color-mix(in srgb, var(--primary-text-color) 8%, transparent)",
         actionHoverBackground: darkMode
           ? "rgba(255,255,255,.14)"
           : "rgba(0,0,0,.08)",
@@ -132,8 +134,10 @@ export function getCardThemeStyles(
         selectionSurface: "var(--secondary-background-color, transparent)",
         selectionBorder: "1px solid var(--divider-color)",
         statusSuccess: "var(--en-color-success)",
-        statusSuccessSurface: "var(--en-color-success-soft)",
+        statusSuccessSurface: "color-mix(in srgb, var(--en-color-success) 14%, var(--ha-card-background, var(--card-background-color)))",
         statusSuccessBorder: "1px solid var(--en-color-success-border)",
+        statusNeutralSurface: "color-mix(in srgb, var(--primary-text-color) 7%, var(--ha-card-background, var(--card-background-color)))",
+        statusNeutralBorder: "1px solid var(--divider-color)",
         iconBadgeBackground: "transparent",
         iconBadgeHoverBackground: "transparent",
         iconBadgeBrandStrength: "18%",
@@ -233,8 +237,14 @@ export function getCardThemeStyles(
           ? "1px solid rgba(255,255,255,.16)"
           : "1px solid rgba(0,0,0,.12)",
         statusSuccess: "var(--en-color-success)",
-        statusSuccessSurface: "var(--en-color-success-soft)",
+        statusSuccessSurface: darkMode
+          ? "color-mix(in srgb, var(--en-color-success) 18%, #1a1d24)"
+          : "color-mix(in srgb, var(--en-color-success) 16%, #f7f7f7)",
         statusSuccessBorder: "1px solid var(--en-color-success-border)",
+        statusNeutralSurface: darkMode ? "#1a1d24" : "#f7f7f7",
+        statusNeutralBorder: darkMode
+          ? "1px solid rgba(255,255,255,.16)"
+          : "1px solid rgba(20,24,32,.14)",
         iconBadgeBackground: "transparent",
         iconBadgeHoverBackground: "transparent",
         iconBadgeBrandStrength: "100%",
@@ -315,6 +325,8 @@ export function getCardThemeStyles(
         statusSuccess: "var(--en-color-success)",
         statusSuccessSurface: "var(--en-color-success-soft)",
         statusSuccessBorder: "1px solid var(--en-color-success-border)",
+        statusNeutralSurface: "rgba(255,255,255,.10)",
+        statusNeutralBorder: "1px solid rgba(255,255,255,.22)",
         iconBadgeBackground: "rgba(255,255,255,.10)",
         iconBadgeHoverBackground: "rgba(255,255,255,.16)",
         iconBadgeBrandStrength: "0%",

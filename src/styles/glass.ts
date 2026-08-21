@@ -59,6 +59,7 @@ export const glassStyle = css`
   .content {
     position: relative;
     z-index: 2;
+    display: var(--glass-container-content-display, block);
     width: 100%;
     height: 100%;
   }

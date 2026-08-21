@@ -19,6 +19,7 @@ const THEMED_CARD_SELECTOR = [
   "energy-flow-diagram",
   "energy-theme-selector",
   "energy-settings-card",
+  "energy-automation-card",
 ].join(",");
 
 const STYLE_ID = "interactive-card-theme-provider";
@@ -122,6 +123,8 @@ export function applyCardTheme(theme: CardTheme): void {
       --en-status-success:${tokens.statusSuccess};
       --en-status-success-surface:${tokens.statusSuccessSurface};
       --en-status-success-border:${tokens.statusSuccessBorder};
+      --en-status-neutral-surface:${tokens.statusNeutralSurface};
+      --en-status-neutral-border:${tokens.statusNeutralBorder};
       --en-icon-badge-background:${tokens.iconBadgeBackground};
       --en-icon-badge-hover-background:${tokens.iconBadgeHoverBackground};
       --en-icon-badge-brand-strength:${tokens.iconBadgeBrandStrength};

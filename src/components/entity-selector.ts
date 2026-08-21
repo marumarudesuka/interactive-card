@@ -2,6 +2,7 @@ import { LitElement, css, html } from "lit";
 
 import type { HomeAssistant } from "custom-card-helpers";
 import type { EntitySelectorFilter } from "../config/config.types";
+import type { DiscoveredMetric } from "../discovery/discovery.types";
 import {
   ENTITY_ID_DISPLAY_LENGTH,
   formatEntityId,
@@ -26,6 +27,7 @@ export class EntitySelector extends LitElement {
     placeholder: { type: String },
     preferredDeviceClasses: { attribute: false },
     preferredUnits: { attribute: false },
+    discoveredMetrics: { attribute: false },
     variant: { type:String, reflect:true },
   };
 
@@ -36,6 +38,7 @@ export class EntitySelector extends LitElement {
   placeholder = "Search entity...";
   preferredDeviceClasses: string[] = [];
   preferredUnits: string[] = [];
+  discoveredMetrics?: readonly DiscoveredMetric[];
   variant:"default"|"inline" = "default";
 
   private search = "";
@@ -202,7 +205,11 @@ export class EntitySelector extends LitElement {
     const stateClasses = this.filter.stateClasses ?? [];
     const query = this.search.trim().toLowerCase();
 
-    return Object.keys(this.hass.states)
+    const entityIds = this.discoveredMetrics
+      ? this.discoveredMetrics.map((metric) => metric.entityId)
+      : Object.keys(this.hass.states);
+
+    return entityIds
       .filter((entityId) => {
         const state = this.hass?.states[entityId];
         const domain = entityId.split(".", 1)[0];
@@ -237,6 +244,9 @@ export class EntitySelector extends LitElement {
         return searchable.includes(query);
       })
       .sort((left, right) => {
+        if (this.discoveredMetrics) {
+          return entityIds.indexOf(left) - entityIds.indexOf(right);
+        }
         const preferenceScore = (entityId: string) => {
           const entityState = this.hass?.states[entityId];
           const attributes = entityState?.attributes;

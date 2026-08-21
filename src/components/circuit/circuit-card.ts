@@ -5,7 +5,7 @@ import type { ResolvedCircuit } from "../../types/circuit";
 import "../common/ic-card-container";
 import "../common/metric-value";
 
-export interface CircuitSelectedDetail {
+export interface CircuitDetailRequest {
   circuit: ResolvedCircuit;
 }
 
@@ -170,8 +170,7 @@ export class CircuitCard extends LitElement {
 
   private openSettings() {
     if (!this.circuit) return;
-    console.debug("[ActiveCircuits] circuit clicked", this.circuit.config.id);
-    this.dispatchEvent(new CustomEvent<CircuitSelectedDetail>("circuit-selected", {
+    this.dispatchEvent(new CustomEvent<CircuitDetailRequest>("circuit-detail-request", {
       detail: { circuit: this.circuit },
       bubbles: true,
       composed: true,

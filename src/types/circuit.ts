@@ -22,7 +22,11 @@ export interface CircuitTemplate extends CircuitConfigInput {
 
 export interface EnergyCircuitSectionConfig {
   type?: string;
+  /** Optional stable identity used to scope browser-local pending Circuits. */
+  id?: string;
   title?: string;
+  /** Shared height, in pixels, for every Circuit card in this section. */
+  cardHeight?: number;
   circuits?: CircuitConfigInput[];
 }
 

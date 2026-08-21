@@ -8,6 +8,7 @@ import {
 } from "../../helpers/trend-chart-formatters";
 import {
   findNearestTrendPoint,
+  findNearestTrendTimestamp,
   getTrendTimeDomain,
   getTrendX,
   getTrendY,
@@ -16,6 +17,7 @@ import {
   createTrendChartLayout,
   type TrendChartLayout,
 } from "../../helpers/trend-chart-layout";
+import { areTrendChartLayoutsEqual } from "../../helpers/trend-layout-commit";
 import { TrendChartModelCache } from "../../helpers/trend-chart-model";
 import { createTrendTimeTicks } from "../../helpers/trend-time-ticks";
 import type {
@@ -161,10 +163,20 @@ export class TrendChart extends LitElement {
     }
 
     .axis-warning {
-      margin: 0 0 8px;
-      color: var(--secondary-text-color);
+      position: absolute;
+      z-index: 4;
+      right: 8px;
+      top: 8px;
+      max-width: min(360px, calc(100% - 16px));
+      padding: 7px 10px;
+      box-sizing: border-box;
+      border: 1px solid var(--warning-color, #f0a000);
+      border-radius: var(--ic-radius-control, 12px);
+      background: var(--card-background-color);
+      color: var(--primary-text-color);
       font-size: 12px;
       line-height: 1.35;
+      pointer-events: none;
     }
 
   `;
@@ -189,14 +201,24 @@ export class TrendChart extends LitElement {
     ).axes;
   }
 
-  private get excludedAxisCount(): number {
+  private get hoverTimestamps():number[] {
     return this.chartModel.resolve(
       this.series,
       this.axes,
       this.hiddenSeries,
       this.timeframe,
       this.renderMode
-    ).excludedAxisCount;
+    ).hoverTimestamps;
+  }
+
+  private get excludedSeries():TrendSeries[] {
+    return this.chartModel.resolve(
+      this.series,
+      this.axes,
+      this.hiddenSeries,
+      this.timeframe,
+      this.renderMode
+    ).excludedSeries;
   }
 
   private getAxisWidth(axis?: ResolvedTrendAxis): number {
@@ -212,17 +234,20 @@ export class TrendChart extends LitElement {
     return Math.min(96, Math.max(42, longest * 7 + 14));
   }
 
-  private updateLayout(width: number, height: number) {
+  private updateLayout(width: number, height: number): boolean {
     const axes = this.activeAxes;
     const leftAxis = axes.find((axis) => axis.axisGroup !== "right");
     const rightAxis = axes.find((axis) => axis.axisGroup === "right");
-    this.layout = createTrendChartLayout(width, height, {
+    const nextLayout = createTrendChartLayout(width, height, {
       axisCount: axes.length,
       leftAxisWidth: this.getAxisWidth(leftAxis),
       rightAxisWidth: this.getAxisWidth(rightAxis),
       hasLeftAxis:Boolean(leftAxis),
       hasRightAxis:Boolean(rightAxis),
     });
+    if (areTrendChartLayoutsEqual(this.layout,nextLayout)) return false;
+    this.layout = nextLayout;
+    return true;
   }
 
   protected updated() {
@@ -244,17 +269,15 @@ export class TrendChart extends LitElement {
       this.resizeObserver = new ResizeObserver(([entry]) => {
         const width = entry.contentRect.width;
         const height = entry.contentRect.height;
-        if (
-          this.layout?.width === width &&
-          this.layout?.height === height
-        ) return;
-        this.updateLayout(width, height);
-        this.requestUpdate();
+        if (this.updateLayout(width,height)) this.requestUpdate();
       });
       this.resizeObserver.observe(chart);
     }
     const rect = chart.getBoundingClientRect();
-    this.updateLayout(rect.width, rect.height);
+    // `layout` is internal rather than a reactive Lit property. The first
+    // synchronous measurement must explicitly schedule the render that
+    // replaces the measurement-only chart with the renderer and hover layer.
+    if (this.updateLayout(rect.width,rect.height)) this.requestUpdate();
   }
 
   disconnectedCallback() {
@@ -287,9 +310,9 @@ export class TrendChart extends LitElement {
       domain.min +
       ((clampedX - plot.left) / plot.width) *
         (domain.max - domain.min);
-    const nearest = findNearestTrendPoint(series[0].points, timestamp);
-    if (!nearest || nearest.timestamp === this.hoverTimestamp) return;
-    this.pendingHoverTimestamp = nearest.timestamp;
+    const nearestTimestamp = findNearestTrendTimestamp(this.hoverTimestamps,timestamp);
+    if (nearestTimestamp === undefined || nearestTimestamp === this.hoverTimestamp) return;
+    this.pendingHoverTimestamp = nearestTimestamp;
     if (this.hoverFrame !== undefined) return;
     this.hoverFrame = requestAnimationFrame(() => {
       this.hoverFrame = undefined;
@@ -318,7 +341,16 @@ export class TrendChart extends LitElement {
   private renderReadyChart() {
     const series = this.visibleSeries;
     const axes = this.activeAxes;
+    const excludedSeries = this.excludedSeries;
     if (!series.length || !axes.length) {
+      if (excludedSeries.length) {
+        return html`
+          <div class="state">
+            Not plotted: ${excludedSeries.map((item) => item.name).join(", ")}.
+            This chart supports two incompatible Y-axis families at a time.
+          </div>
+        `;
+      }
       return html`
         <div class="state">No series visible</div>
       `;
@@ -375,21 +407,20 @@ export class TrendChart extends LitElement {
               id: item.id,
               x: hoverX,
               y: getTrendY(point.value, axis, plot),
-              color: getTrendSeriesColor(item.color, index),
+              color: getTrendSeriesColor(item.color, index, item.id),
             }]
           : [];
       }
     );
 
     return html`
-      ${this.excludedAxisCount
-        ? html`
-            <div class="axis-warning" role="status">
-              Multiple units detected. Please select series to compare.
-            </div>
-          `
-        : null}
       <div class="chart">
+        ${excludedSeries.length ? html`
+          <div class="axis-warning" role="status">
+            Not plotted: ${excludedSeries.map((item) => item.name).join(", ")}.
+            This chart supports two incompatible Y-axis families at a time.
+          </div>
+        ` : null}
         <ic-trend-line-renderer
           .series=${series}
           .axes=${axes}
@@ -450,7 +481,8 @@ export class TrendChart extends LitElement {
                         class="dot"
                         style=${`background:${getTrendSeriesColor(
                           item.color,
-                          index
+                          index,
+                          item.id
                         )}`}
                       ></span>
                       ${item.name}

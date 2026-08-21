@@ -11,6 +11,7 @@ export type TrendCategory =
   | "circuit";
 
 export interface TrendEntityConfig {
+  id?: string;
   entity: string;
   order?: number;
   chartMode?: TrendChartMode;
@@ -19,6 +20,7 @@ export interface TrendEntityConfig {
   category?: TrendCategory;
   unit?: string;
   enabled?: boolean;
+  visible?: boolean;
   decimals?: number;
   autoScale?: boolean;
   lineStyle?: TrendLineStyle;

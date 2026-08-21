@@ -31,12 +31,27 @@ const chartModes: readonly TrendChartMode[] = ["line", "area", "bar"];
 function normalizeEntity(
   entity: TrendEntityConfig,
   index: number,
-  fallbackChartMode: TrendChartMode
+  fallbackChartMode: TrendChartMode,
+  usedIds: Set<string>
 ): TrendEntityConfig | undefined {
   const entityId = entity.entity?.trim();
   if (!entityId) return undefined;
 
+  const requestedId = entity.id?.trim().toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  const entityBase = entityId.split(".").pop()?.toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "_")
+    .replace(/^_+|_+$/g, "") || "series";
+  const baseId = requestedId || entityBase;
+  let id = baseId;
+  let suffix = 2;
+  while (usedIds.has(id)) id = `${baseId}_${suffix++}`;
+  usedIds.add(id);
+  const visible = entity.visible ?? entity.enabled ?? true;
+
   return {
+    id,
     entity: entityId,
     order:
       typeof entity.order === "number" && Number.isFinite(entity.order)
@@ -51,7 +66,8 @@ function normalizeEntity(
       ? entity.category
       : undefined,
     unit: entity.unit?.trim() || undefined,
-    enabled: entity.enabled !== false,
+    enabled: visible,
+    visible,
     decimals:
       typeof entity.decimals === "number" &&
       Number.isFinite(entity.decimals)
@@ -86,6 +102,8 @@ export function normalizeEnergyTrendCardConfig(
       ? Math.max(240, config.height)
       : 350;
 
+  const usedIds = new Set<string>();
+
   return {
     id: config.id?.trim() || undefined,
     type: config.type,
@@ -105,7 +123,8 @@ export function normalizeEnergyTrendCardConfig(
           .map((entity, index) => normalizeEntity(
             entity,
             index,
-            fallbackChartMode
+            fallbackChartMode,
+            usedIds
           ))
           .filter((entity): entity is TrendEntityConfig => Boolean(entity))
           .sort((left, right) => (left.order ?? 0) - (right.order ?? 0))

@@ -16,6 +16,7 @@ export class IcSegmentedControl extends LitElement {
     label: { type: String },
     widthMode: { type:String, attribute:"width", reflect:true },
     size: { type:String, reflect:true },
+    disabled:{type:Boolean,reflect:true},
   };
 
   options: SegmentedOption[] = [];
@@ -23,6 +24,7 @@ export class IcSegmentedControl extends LitElement {
   label = "Options";
   widthMode:"fit"|"full" = "fit";
   size:"default"|"compact-28" = "default";
+  disabled=false;
 
   static styles = css`
     :host { display:inline-flex; width:fit-content; max-width:100%; min-width:0; }
@@ -80,6 +82,8 @@ export class IcSegmentedControl extends LitElement {
       cursor:pointer;
       font:inherit;
       font-size:var(--segment-font-size,13px);
+      overflow:hidden;
+      text-overflow:ellipsis;
       white-space:nowrap;
     }
     button:hover { background:var(--ic-action-hover-background,rgba(127,127,127,.14)); }
@@ -90,10 +94,11 @@ export class IcSegmentedControl extends LitElement {
     }
     :host([width="full"]) button { flex:1 1 0; min-width:0; }
     button:focus-visible { outline:var(--ic-focus-ring); outline-offset:2px; }
+    :host([disabled]) { opacity:.55; pointer-events:none; }
   `;
 
   private select(value: string) {
-    if (value === this.value) return;
+    if (this.disabled || value === this.value) return;
     this.dispatchEvent(new CustomEvent<SegmentedChangeDetail>("segmented-change", {
       detail:{ value }, bubbles:true, composed:true,
     }));
@@ -115,7 +120,7 @@ export class IcSegmentedControl extends LitElement {
       <span class="indicator" aria-hidden="true"></span>
       ${this.options.map((option) => html`<button type="button" role="radio"
         class=${option.value === this.value ? "active" : ""}
-        aria-checked=${option.value === this.value}
+        aria-checked=${option.value === this.value} ?disabled=${this.disabled}
         @click=${() => this.select(option.value)}>${option.label}</button>`)}
     </div>`;
   }

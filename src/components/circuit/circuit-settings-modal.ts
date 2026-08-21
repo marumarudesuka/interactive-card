@@ -6,7 +6,7 @@ import type { IconPickerChangeDetail } from "../common/icon-picker";
 import type { DialogCloseDetail } from "../common/app-dialog";
 import type { CircuitConfig } from "../../types/circuit";
 import { resolveCircuit } from "../../helpers/circuit-utils";
-import { isRealTimePowerEntity } from "../../helpers/power-entity";
+import type { DiscoveredMetric } from "../../discovery/discovery.types";
 import { dialogContentStyle } from "../../design-system/dialog";
 import {
   formatEntityId,
@@ -37,17 +37,21 @@ export class CircuitSettingsModal extends LitElement {
     hass: { attribute: false },
     circuit: { attribute: false },
     mode: { type: String },
+    discoveredMetrics: { attribute: false },
   };
 
   open = false;
   hass?: HomeAssistant;
   circuit?: CircuitConfig;
   mode: "create" | "edit" = "edit";
+  discoveredMetrics: readonly DiscoveredMetric[] = [];
   private draft?: CircuitConfig;
   private entityPickerExpanded = false;
   private iconPickerExpanded = false;
   private saving = false;
   private deleting = false;
+  private nameEdited = false;
+  private iconEdited = false;
 
   static styles = [css`
     :host {
@@ -88,6 +92,12 @@ export class CircuitSettingsModal extends LitElement {
       font-weight: 400;
       line-height: 1.3;
     }
+    .pending-note {
+      margin:0;
+      color:var(--en-text-secondary,var(--secondary-text-color));
+      font-size:var(--en-helper-font-size,13px);
+      line-height:1.4;
+    }
   `, dialogContentStyle];
 
   protected willUpdate(changed:PropertyValues<this>) {
@@ -100,6 +110,8 @@ export class CircuitSettingsModal extends LitElement {
       this.iconPickerExpanded = false;
       this.saving = false;
       this.deleting = false;
+      this.nameEdited = false;
+      this.iconEdited = false;
     }
   }
 
@@ -109,6 +121,8 @@ export class CircuitSettingsModal extends LitElement {
     this.iconPickerExpanded = false;
     this.saving = false;
     this.deleting = false;
+    this.nameEdited = false;
+    this.iconEdited = false;
     this.dispatchEvent(new CustomEvent("circuit-settings-close", {
       bubbles: true,
       composed: true,
@@ -121,13 +135,42 @@ export class CircuitSettingsModal extends LitElement {
   ) {
     if (!this.draft) return;
     this.draft = { ...this.draft, [field]: value };
+    if (field === "name") this.nameEdited = true;
+    if (field === "icon") this.iconEdited = true;
     this.requestUpdate();
   }
 
   private selectEntity(event: CustomEvent<EntitySelectedDetail>) {
     event.stopPropagation();
-    this.updateField("entity", event.detail.entityId);
+    if (!this.draft) return;
+    const entityId = event.detail.entityId;
+    const metric = this.discoveredMetrics.find(
+      (candidate) => candidate.entityId === entityId
+    );
+    const friendlyName = String(
+      this.hass?.states[entityId]?.attributes.friendly_name ??
+      metric?.name ??
+      entityId
+    );
+    this.draft = {
+      ...this.draft,
+      entity:entityId,
+      name:this.nameEdited ? this.draft.name : friendlyName,
+      icon:this.iconEdited
+        ? this.draft.icon
+        : this.recommendedIcon(metric),
+    };
     this.entityPickerExpanded = false;
+    this.requestUpdate();
+  }
+
+  private recommendedIcon(metric:DiscoveredMetric | undefined):string {
+    switch (metric?.suggestedRole) {
+      case "solar_power": return "mdi:solar-power";
+      case "main_power": return "mdi:transmission-tower";
+      case "circuit_power": return "mdi:electric-switch";
+      default: return "mdi:flash";
+    }
   }
 
   private selectIcon(event: CustomEvent<IconPickerChangeDetail>) {
@@ -189,11 +232,8 @@ export class CircuitSettingsModal extends LitElement {
           .value=${this.draft?.entity ?? ""}
           .filter=${{
             domains:["sensor"],
-            predicate:(entityId:string) => isRealTimePowerEntity(
-              entityId,
-              this.hass?.states[entityId]
-            ),
           }}
+          .discoveredMetrics=${this.discoveredMetrics}
           .preferredDeviceClasses=${["power"]}
           .preferredUnits=${["W", "kW", "MW"]}
           @entity-selected=${this.selectEntity}
@@ -208,16 +248,15 @@ export class CircuitSettingsModal extends LitElement {
   private get entityValidationMessage(): string {
     const entityId = this.draft?.entity.trim() ?? "";
     if (!entityId) return "";
-    return isRealTimePowerEntity(entityId, this.hass?.states[entityId])
+    return this.discoveredMetrics.some((metric) => metric.entityId === entityId)
       ? ""
       : "This entity is not a real-time power sensor. Select a sensor using W, kW, or MW.";
   }
 
   private get hasValidPowerEntity(): boolean {
     const entityId = this.draft?.entity.trim() ?? "";
-    return Boolean(entityId) && isRealTimePowerEntity(
-      entityId,
-      this.hass?.states[entityId]
+    return Boolean(entityId) && this.discoveredMetrics.some(
+      (metric) => metric.entityId === entityId
     );
   }
 
@@ -229,7 +268,8 @@ export class CircuitSettingsModal extends LitElement {
     if (!this.circuit) return true;
     return name !== this.circuit.name.trim() ||
       entity !== this.circuit.entity.trim() ||
-      (this.draft.icon?.trim() || "") !== (this.circuit.icon?.trim() || "");
+      (this.draft.icon?.trim() || "") !== (this.circuit.icon?.trim() || "") ||
+      (this.draft.category?.trim() || "") !== (this.circuit.category?.trim() || "");
   }
 
   private renderEntityStatus() {
@@ -347,11 +387,19 @@ export class CircuitSettingsModal extends LitElement {
           : "Edit Circuit"}</span>
 
         <div class="form">
-          <ic-field label="Circuit Name" .value=${this.draft.name}
-            @field-input=${(event:CustomEvent<FieldValueDetail>) =>
-              this.updateField("name", event.detail.value)}></ic-field>
+          ${this.mode === "edit" ? html`
+            <ic-field label="Circuit Name" .value=${this.draft.name}
+              @field-input=${(event:CustomEvent<FieldValueDetail>) =>
+                this.updateField("name", event.detail.value)}></ic-field>
+          ` : null}
 
           ${this.renderEntityTrigger()}
+
+          ${this.mode === "create" ? html`
+            <ic-field label="Display Name" .value=${this.draft.name}
+              @field-input=${(event:CustomEvent<FieldValueDetail>) =>
+                this.updateField("name", event.detail.value)}></ic-field>
+          ` : null}
 
           <div class="inline-field-group icon-field-group"
             @click=${(event:Event) => event.stopPropagation()}>
@@ -376,7 +424,17 @@ export class CircuitSettingsModal extends LitElement {
             ` : null}
           </div>
 
+          ${this.mode === "edit" ? html`
+            <ic-field label="Category" .value=${this.draft.category ?? ""}
+              @field-input=${(event:CustomEvent<FieldValueDetail>) =>
+                this.updateField("category", event.detail.value)}></ic-field>
+          ` : null}
+
           ${this.renderEntityStatus()}
+
+          ${this.mode === "create" ? html`
+            <p class="pending-note">This saves the Circuit locally on this browser. Import it from the Home Assistant card editor to make it part of Lovelace.</p>
+          ` : null}
 
           <div class="actions">
             ${this.mode === "edit" ? html`
@@ -389,7 +447,7 @@ export class CircuitSettingsModal extends LitElement {
             <ic-button @click=${this.close} .disabled=${this.deleting}>Cancel</ic-button>
             <ic-button variant="primary" @click=${this.save}
               .disabled=${!this.canSave} .loading=${this.saving}>
-              ${this.mode === "create" ? "Add Circuit" : "Save"}
+              ${this.mode === "create" ? "Add" : "Save"}
             </ic-button>
           </div>
         </div>

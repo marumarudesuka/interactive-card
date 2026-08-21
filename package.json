@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "typecheck": "tsc --noEmit",
-    "verify": "node --experimental-strip-types scripts/verify-core.mjs",
+    "verify": "node --experimental-strip-types scripts/verify-core.mjs && node --experimental-strip-types scripts/verify-recommendation.mjs && node --experimental-strip-types scripts/verify-setup.mjs && node --experimental-strip-types scripts/verify-trend-analysis.mjs && node --experimental-strip-types scripts/verify-circuit-detail.mjs",
     "check": "npm run typecheck && npm run verify && npm run build",
     "build": "tsc && vite build",
     "preview": "vite preview"

@@ -84,19 +84,29 @@ export function createTrendAxes(
       max: rawMax,
     };
   });
+  // Reserve explicit side preferences before assigning automatic axes. This
+  // prevents an earlier auto family from consuming a side requested by a
+  // later Series. Duplicate explicit requests remain overflow rather than
+  // being silently remapped to the opposite semantic side.
   const assigned = new Set<"left" | "right">();
-  const resolved = axes.map((axis, index) => {
-    let axisGroup = axis.axisGroup;
-    if (!axisGroup || assigned.has(axisGroup)) {
-      axisGroup = !assigned.has("left") ? "left" :
-        !assigned.has("right") ? "right" : undefined;
+  const resolved = axes.map((axis) => {
+    if (!axis.axisGroup || assigned.has(axis.axisGroup)) {
+      return { ...axis, axisGroup:undefined };
     }
-    if (axisGroup) assigned.add(axisGroup);
-    return { ...axis, axisGroup:index < 2 ? axisGroup : undefined };
+    assigned.add(axis.axisGroup);
+    return { ...axis };
   });
-  return resolved.sort((left, right) =>
-    left.axisGroup === right.axisGroup ? 0 : left.axisGroup === "left" ? -1 : 1
-  );
+  for (let index = 0; index < resolved.length; index += 1) {
+    if (axes[index].axisGroup || resolved[index].axisGroup) continue;
+    const axisGroup = !assigned.has("left") ? "left" :
+      !assigned.has("right") ? "right" : undefined;
+    if (!axisGroup) continue;
+    assigned.add(axisGroup);
+    resolved[index] = { ...resolved[index],axisGroup };
+  }
+  const sideRank = (axis:TrendAxis) =>
+    axis.axisGroup === "left" ? 0 : axis.axisGroup === "right" ? 1 : 2;
+  return resolved.sort((left, right) => sideRank(left) - sideRank(right));
 }
 
 export function transformTrendHistory(
@@ -128,7 +138,7 @@ export function transformTrendHistory(
     );
 
     return {
-      id: config.entity,
+      id: config.id ?? config.entity,
       entity: config.entity,
       name: config.name ?? entityMetadata.name ?? config.entity,
       color: config.color,
@@ -144,7 +154,7 @@ export function transformTrendHistory(
           : undefined,
       precision: config.decimals ?? 2,
       points: transformed.points,
-      visible: config.enabled !== false,
+      visible: config.visible ?? config.enabled ?? true,
       lineStyle: config.lineStyle ?? "solid",
       renderMode: config.renderMode,
     };

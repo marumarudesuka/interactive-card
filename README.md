@@ -1,193 +1,116 @@
 # Interactive Card
 
-[English](./README.md) | [简体中文](./README_CN.md)
+Interactive Card is a collection of Lovelace custom cards designed for Home Assistant dashboards.
 
-Interactive Card is a collection of Lovelace custom cards designed for Home Assistant energy dashboards.
+The project started as a set of reusable components for a home energy dashboard and has gradually expanded to cover **key metrics, historical trends, real-time circuit monitoring, and automation scenarios**.
 
-The project started as a way to organize several reusable cards from a personal energy dashboard. As more features were added, it gradually evolved into a lightweight component library covering KPI data visualization, historical trend analysis, and real-time circuit power monitoring.
-
-All cards share a consistent visual design system and can be flexibly configured using different Home Assistant entities, helping users better understand and manage their home energy data.
+All cards share a consistent visual and interaction language and can be connected to different Home Assistant entities, extending the dashboard from energy data visualization to understanding and controlling home automations.
 
 <p align="center">
   <img
-    src="./docs/dashboard_overview.png"
-    alt="Interactive Card energy dashboard overview"
+    src="./docs/cards/images/overview/first_pics.png"
+    alt="Interactive Card Dashboard Overview"
     width="100%"
   >
 </p>
+
+## Explore the Cards
+
+Interactive Card currently includes four main components. Each Card has its own page covering interactions, editing, and configuration.
+
+### KPI Card
+
+Keep important metrics such as real-time power, energy consumption, and energy cost visible directly on the Dashboard. Click a KPI to view more information, and use Home Assistant's native editor to manage and configure individual metrics.
+
+[Explore KPI Card →](./docs/cards/kpi.md)
+
+### Trend Card
+
+Visualize how Home Assistant data changes over time and compare multiple curves within the same chart. Click the card to explore recent changes and automatic analysis, while each curve can be configured with its own display style.
+
+[Explore Trend Card →](./docs/cards/trend.md)
+
+### Circuit Card
+
+Monitor the real-time power and operating status of household circuits or devices. Click a Circuit to view recent power changes on a timeline, and add custom circuits to match your own Home Assistant setup.
+
+[Explore Circuit Card →](./docs/cards/circuit.md)
+
+### Automation Scenario
+
+Organize multiple related Home Assistant Automations into a complete scenario. Scenario Cards display automation status, activity, and decision information directly on the Dashboard, while clicking a card opens the Control Panel for interacting with the scenario and related devices.
+
+[Explore Automation Scenario →](./docs/cards/automation-scenario.md)
+
+---
 
 ## Features
 
-Interactive Card currently includes three main components:
+Interactive Card components share a consistent configuration and interaction model and are integrated into Home Assistant's native Dashboard editing workflow.
 
-- **KPI** — Display key energy metrics such as consumption, power, and cost
-- **Trend** — Analyze historical data with configurable data series
-- **Circuit** — Monitor real-time power status of individual circuits
+Alongside flexible entity selection and display configuration, Trend supports multiple curves with independent styles, Circuit provides real-time power monitoring and timelines, and Automation Scenario brings automation status, decision information, and device controls directly into the Dashboard.
 
-Supported features:
+Three visual styles are currently available: **Glass, Native, and Solid**, with responsive layouts designed for different Dashboard sizes.
 
-- Flexible Home Assistant entity selection
-- Custom card titles, icons, units, decimal places, and KPI descriptions
-- Automatic power and energy unit conversion and scaling
-- Multiple trend series with Line, Area, and Bar chart modes
-- Automatic, left, and right Y-axis configuration
-- Adjustable trend resolution, time range, and chart height
-- Custom circuit names, real-time power entities, and device icons
-- Browser-local configuration persistence for dashboard edits
-- Three visual styles: Glass, Native, and Solid
-- Responsive layouts for KPI and circuit cards across different screen sizes
-
-
-## Screenshots
-
-### KPI
-
-KPI cards can be added, removed, and edited directly from the dashboard.
-
-Users can select the displayed entity and customize the title, unit, decimal places, and subtitle information.
-
-<p align="center">
-  <img
-    src="./docs/page1_kpi_card_edit.png"
-    alt="KPI card editor interface"
-    width="100%"
-  >
-</p>
-
-
-### Trend
-
-The Trend card is designed to visualize how energy data changes over time.
-
-It supports multiple data series displayed together, with the ability to quickly hide or show individual curves by clicking the legend.
-
-<p align="center">
-  <img
-    src="./docs/page2.1_configure_trend.png"
-    alt="Energy trend chart with multiple data series"
-    width="100%"
-  >
-</p>
-
-<p align="center">
-  <img
-    src="./docs/page2.2_trend_card_click.png"
-    alt="Trend card interaction interface"
-    width="100%"
-  >
-</p>
-
-Each Series can be configured independently, including display name, unit, chart type, axis position, and decimal places.
-
-Since Home Assistant sensors may have different sampling frequencies, displaying raw data directly can introduce excessive short-term fluctuations.
-
-The Trend card therefore uses smoothing by default to provide a clearer view of overall changes, while also supporting a high-precision mode for users who need detailed data inspection.
-
-
-### Circuit
-
-The Circuit card provides real-time power monitoring for different household circuits.
-
-Users can customize circuit names, bind real-time power sensors, and select device icons.
-
-Status indicators and color feedback are used to show the current circuit state, real-time power, and data update time, helping users quickly understand the operating status of each circuit.
-
-<p align="center">
-  <img
-    src="./docs/page3_circuit.png"
-    alt="Circuit configuration interface"
-    width="100%"
-  >
-</p>
+---
 
 
 ## Available Cards
 
-The current build registers the following Lovelace card types:
+| Card                               | Description                                 |
+| ---------------------------------- | ------------------------------------------- |
+| `custom:energy-kpi-card`           | Display a configurable KPI                  |
+| `custom:energy-kpi-section`        | Organize and display a group of KPI cards   |
+| `custom:energy-trend-card`         | Display historical data trends              |
+| `custom:energy-circuit-section`    | Display real-time Circuit power information |
+| `custom:energy-automation-section` | Organize and display Automation Scenarios   |
+| `custom:energy-flow-diagram`       | Display energy nodes and flow connections   |
+| `custom:energy-theme-selector`     | Switch Dashboard visual styles              |
+| `custom:energy-settings-card`      | Configure Dashboard appearance              |
 
-| Card | Description |
-|---|---|
-| `custom:energy-kpi-card` | Display a configurable KPI value |
-| `custom:energy-kpi-section` | Manage and display a group of KPI cards |
-| `custom:energy-trend-card` | Display configurable historical data series |
-| `custom:energy-circuit-section` | Display real-time circuit power information |
-| `custom:energy-flow-diagram` | Display configured energy nodes and flow connections |
-| `custom:energy-theme-selector` | Switch between Glass, Native, and Solid styles |
-| `custom:energy-settings-card` | Provide card style configuration options |
-| `custom:energy-ev-charging-scene` | Display the built-in EV charging scene |
-| `custom:energy-solar-scene` | Display the built-in solar energy scene |
-| `custom:energy-battery-scene` | Display the built-in battery storage scene |
-
+---
 
 ## Installation
 
 ### Manual Installation
 
-The current version can be installed manually.
+Download the latest `interactive-card.js` and copy it to:
 
-1. Download the latest `interactive-card.js`.
-2. Copy the file to your Home Assistant:
-
-```text
+```text id="pzfvfd"
 /config/www/interactive-card/interactive-card.js
 ```
 
-3. Open:
+Then open the following page in Home Assistant:
 
-```text
+```text id="fut0m7"
 Settings → Dashboards → Resources
 ```
 
 <p align="center">
   <img
-    src="./docs/Setting_Dashboard_Resource.png"
-    alt="Home Assistant dashboard resource settings"
+    src="./docs/cards/images/overview/Setting_Dashboard_Resource.png"
+    alt="Home Assistant Dashboard Resource Settings"
     width="100%"
   >
 </p>
 
-4. Add the resource:
+Add the following resource:
 
-```text
+```text id="4ln7r8"
 /local/interactive-card/interactive-card.js
 ```
 
-Select **JavaScript Module** as the resource type.
+Select **JavaScript Module** as the Resource Type, save the configuration, and refresh your Home Assistant Dashboard.
 
-5. Refresh your Home Assistant dashboard.
-
+---
 
 ## Quick Start
 
-Add a KPI card to your dashboard:
+After adding the resource, Interactive Card can be added through Home Assistant's Dashboard editing workflow.
 
-```yaml
-type: custom:energy-kpi-card
-entity: sensor.home_power
-title: Current Power
-icon: mdi:flash
-unit: W
-decimals: 2
-autoScale: true
-```
+For example:
 
-Replace the example entity with an entity that exists in your Home Assistant instance.
-
-
-## Configuration Examples
-
-Interactive Card currently provides three main card categories:
-
-- KPI visualization
-- Energy trend analysis
-- Circuit power monitoring
-
-
-### KPI Section
-
-KPI cards are designed to display key home energy metrics, such as real-time power, daily consumption, and energy cost.
-
-```yaml
+```yaml id="ejxj6f"
 type: custom:energy-kpi-section
 title: Energy Overview
 cards:
@@ -202,87 +125,66 @@ cards:
     unit: kWh
 ```
 
+Replace the example entities with entities available in your Home Assistant instance.
 
-### Trend Card
+KPI, Trend, Circuit, and Automation Scenario can all be configured through the Home Assistant Dashboard editor. More detailed usage and configuration examples are available on each Card's documentation page.
 
-```yaml
-type: custom:energy-trend-card
-title: Energy Trend
-entities:
-  - entity: sensor.home_power
-    name: Main Power
-    unit: W
-```
-
-
-### Active Circuits
-
-```yaml
-type: custom:energy-circuit-section
-title: Active Circuits
-circuits:
-  - name: Kitchen
-    entity: sensor.kitchen_power
-    icon: mdi:stove
-
-  - name: HVAC
-    entity: sensor.hvac_power
-    icon: mdi:air-conditioner
-```
-
+---
 
 ## Project Structure
 
-```text
+```text id="d0tz8e"
 src/
-├── components/       Lovelace cards and shared UI components
-├── config/           Configuration normalization and card registry
-├── data/             Default KPI, circuit, and scene data
-├── design-system/    Shared visual tokens and dialog styles
-├── helpers/          Formatting, entity, chart, and layout logic
-├── repositories/     Browser-local configuration persistence
-├── styles/           Shared card styles and responsive layouts
-├── theme/            Card material and theme handling
-├── types/            TypeScript configuration and view models
-└── index.ts          Build entry point
+├── automation/        Automation Scenario logic
+├── components/        Lovelace cards and shared UI
+├── config/            Configuration and card registry
+├── data/              Default card and scenario data
+├── design-system/     Shared visual system
+├── helpers/           Entity, chart, formatting and layout logic
+├── repositories/      Configuration persistence
+├── styles/            Shared card styles
+├── theme/             Theme handling
+├── types/             TypeScript types
+└── index.ts           Build entry point
 
-docs/                 Screenshots and architecture documentation
-scripts/              Project validation scripts
-dist/                 Generated production build
+docs/
+├── cards/
+│   ├── kpi.md
+│   ├── trend.md
+│   ├── circuit.md
+│   ├── automation-scenario.md
+│   └── images/
+│       ├── overview/
+│       │   ├── first_pics.png
+│       │   └── Setting_Dashboard_Resource.png
+│       ├── kpi/
+│       ├── trend/
+│       ├── circuit/
+│       └── automation/
+└── architecture.md    Architecture overview
+
+scripts/               Validation scripts
+dist/                  Production build
 ```
 
-A brief overview of the internal architecture is available in [docs/architecture.md](./docs/architecture.md).
+For a more detailed overview of the internal architecture:
 
+[Explore Architecture →](./docs/architecture.md)
+
+---
 
 ## Future Plans
 
-The project is currently under active development. Future work focuses on stability, compatibility, and preparation for the Home Assistant community ecosystem.
+Interactive Card is still under active development. With KPI, Trend, Circuit, and Automation Scenario now forming the main Dashboard component set, the next stage will focus on improving stability and compatibility across different Home Assistant environments while continuing to refine editing and interaction experiences.
 
-Near-term plans:
+The project will also continue improving its documentation, repository structure, and release workflow in preparation for future HACS distribution.
 
-- Test across different Home Assistant configurations to improve compatibility
-- Improve repository structure and metadata required for future HACS publication
-- Continue refining card interactions and energy visualization based on community feedback
-
-Long-term plans:
-
-- Integrate more smart home device data for a more complete home energy management experience
-- Combine Home Assistant automation capabilities with energy data for intelligent control, such as solar optimization, smart plugs, and energy usage strategies
-- Develop more editable energy scenarios that allow users to create personalized automation experiences
-- Continue improving interface design and interaction quality for easier energy monitoring, analysis, and management
-
+---
 
 ## Feedback & Support
 
-Welcome to submit issues, feature requests, and usage feedback through GitHub Issues.
+Bug reports, feature requests, and usage feedback are welcome through GitHub Issues.
 
-When reporting a problem, please provide the following information when possible:
+When reporting a problem, including your Home Assistant version, browser environment, related entities, screenshots, and reproduction steps can help identify the issue more quickly.
 
-- Home Assistant version
-- Browser environment
-- Entity type being used
-- Screenshots or reproduction steps
-
-This information helps identify problems faster and continuously improve the project.
-
-New feature ideas and discussions are also welcome as we continue improving the Interactive Card energy management experience.
+Ideas for new Cards, Automation Scenarios, and home energy management use cases are also welcome.

@@ -18,6 +18,7 @@ export type KpiCardConfig = CustomKpiConfig;
 
 export interface EnergyKpiSectionConfig extends BaseCardConfig {
   cards: KpiCardConfig[];
+  cardHeight?: number;
 }
 
 export interface EntitySelectorFilter {

@@ -6,9 +6,9 @@ import type {
   KpiTemplate,
 } from "../config/config.types";
 import {
-  discoverForTemplates,
   type DiscoveryTemplate,
 } from "./entity-discovery.ts";
+import { createKpiDiscoveryResults, discoverEnergyMetrics } from "../discovery/discovery-consumers.ts";
 
 export interface EntityUpdateResult {
   cards: CustomKpiConfig[];
@@ -67,7 +67,7 @@ function createConfigFromTemplate(template: KpiTemplate): CustomKpiConfig {
 export function mergeKpiCards(
   cards: CustomKpiConfig[],
   templates: readonly KpiTemplate[],
-  discoveryResults: Record<string, any[]> = {}
+  discoveryResults: Readonly<Record<string, readonly { entityId:string }[]>> = {}
 ): CustomKpiConfig[] {
   const mapped = new Map<string, CustomKpiConfig>();
 
@@ -141,9 +141,9 @@ export function resolveKpiCards(
   cards: CustomKpiConfig[],
   templates: readonly KpiTemplate[]
 ): CustomKpiConfig[] {
-  const discoveryResults = discoverForTemplates(
-    hass,
-    createDiscoveryTemplates(templates)
+  const discoveryResults = createKpiDiscoveryResults(
+    discoverEnergyMetrics(hass),
+    templates
   );
   return mergeKpiCards(cards, templates, discoveryResults);
 }

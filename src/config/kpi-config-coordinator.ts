@@ -70,21 +70,8 @@ export class KpiConfigCoordinator {
     input: ResolveKpiConfigInput = {}
   ): Promise<ResolvedKpiConfig[]> {
     await this.saveQueue;
-
-    let repositoryCards: CustomKpiConfig[];
-    try {
-      repositoryCards = await this.repository.load();
-    } catch (error) {
-      throw new KpiConfigCoordinatorError(
-        "load",
-        "Unable to load KPI configuration",
-        error
-      );
-    }
-
     return mergeKpiConfigSources({
       templates: this.templates,
-      repositoryCards,
       yamlCards: input.yamlCards,
       discovery: input.discovery,
     });

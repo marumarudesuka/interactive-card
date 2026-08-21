@@ -14,6 +14,7 @@ import type {
   EnergyTrendCardConfig,
   TrendAxis,
   TrendDataStatus,
+  TrendEntityConfig,
   TrendSeries,
   TrendTimeframe,
 } from "../types/trend";
@@ -30,10 +31,24 @@ import "./common/segmented-control";
 import type { SegmentedChangeDetail } from "./common/segmented-control";
 import "./trend/trend-chart";
 import "./trend/trend-legend";
-import "./trend/trend-settings-dialog";
-import type { TrendSettingsSaveDetail } from "./trend/trend-settings-dialog";
-import type { TrendSettingsChangeDetail } from "./trend/trend-settings-dialog";
-import { LocalStorageTrendConfigRepository } from "../repositories/local-storage-trend-config-repository";
+import "./trend/trend-analysis-panel";
+import {
+  getPendingTrendScope,
+  LocalStoragePendingTrendSeriesRepository,
+} from "../repositories/local-storage-pending-trend-series-repository.ts";
+import { discoverEnergyMetrics, getTrendDiscoveryCandidates } from "../discovery/discovery-consumers.ts";
+import type { DiscoveredMetric } from "../discovery/discovery.types";
+import "../editors/energy-trend-card-editor";
+import { getTrendSeriesColor } from "../helpers/trend-chart-formatters.ts";
+import {
+  applyTrendPresentationConfig,
+  classifyTrendConfigChange,
+} from "../helpers/trend-config-change-classifier.ts";
+import {
+  LocalStoragePendingTrendRemovalRepository,
+  matchesPendingTrendRemoval,
+  type PendingTrendRemoval,
+} from "../repositories/local-storage-pending-trend-removal-repository.ts";
 
 const timeframes: readonly TrendTimeframe[] = [
   "1H",
@@ -60,7 +75,7 @@ function getHistoryErrorMessage(error: unknown): string {
   return "Unable to load history";
 }
 
-function isEnergyRelatedEntity(
+export function isEnergyRelatedEntity(
   entityId: string,
   hass?: HomeAssistant
 ): boolean {
@@ -86,6 +101,10 @@ function getTrendMenuName(
 }
 
 export class EnergyTrendCard extends LitElement {
+  static getConfigElement() {
+    return document.createElement("energy-trend-card-editor");
+  }
+
   static properties = {
     hass: { attribute: false },
     config: { attribute: false },
@@ -94,6 +113,7 @@ export class EnergyTrendCard extends LitElement {
   config?: EnergyTrendCardConfig;
 
   private _hass?: HomeAssistant;
+  private discoveryMetrics: readonly DiscoveredMetric[] = [];
   private timeframe: TrendTimeframe = "24H";
   private status: TrendDataStatus = "idle";
   private errorMessage = "";
@@ -102,19 +122,24 @@ export class EnergyTrendCard extends LitElement {
   private loadVersion = 0;
   private settingsMenuOpen = false;
   private seriesSearch = "";
-  private settingsDialogOpen = false;
-  private settingsDialogEntity = "";
   private hiddenSeriesIds = new Set<string>();
-  private readonly configCoordinator = new TrendConfigCoordinator(
-    new LocalStorageTrendConfigRepository()
-  );
+  private analysisPanelOpen = false;
+  private readonly configCoordinator = new TrendConfigCoordinator();
+  private readonly pendingSeriesRepository =
+    new LocalStoragePendingTrendSeriesRepository();
+  private formalConfig?:EnergyTrendCardConfig;
+  private pendingSeries:TrendEntityConfig[] = [];
+  private pendingRemovals:PendingTrendRemoval[] = [];
+  private readonly pendingRemovalRepository = new LocalStoragePendingTrendRemovalRepository();
   private configResolutionVersion = 0;
   private configStorageId = "energy-trend";
+  private configSettled = false;
 
   set hass(hass: HomeAssistant) {
     const isFirstAssignment = !this._hass;
     this._hass = hass;
-    if (isFirstAssignment && this.config) {
+    this.discoveryMetrics = discoverEnergyMetrics(hass);
+    if (isFirstAssignment && this.config && this.configSettled) {
       void this.loadHistory();
     }
   }
@@ -176,8 +201,41 @@ export class EnergyTrendCard extends LitElement {
       box-sizing:border-box;
     }
 
-    .series-manager-row.hidden-series {
-      opacity:.55;
+    .series-manager-row {
+      min-width:0;
+    }
+
+    .series-actions {
+      display:grid;
+      gap:var(--en-menu-item-gap,6px);
+      margin:2px 4px 6px 20px;
+      padding:6px;
+      border:var(--ic-border-control,var(--en-border));
+      border-radius:var(--en-panel-radius,18px);
+      background:var(--en-surface-control,transparent);
+    }
+
+    .more {
+      display:grid;
+      width:28px;
+      height:28px;
+      padding:0;
+      place-items:center;
+      border:0;
+      border-radius:var(--ic-radius-control);
+      background:transparent;
+      color:var(--en-text-secondary,var(--secondary-text-color));
+      cursor:pointer;
+    }
+
+    .more:hover {
+      background:var(--ic-action-hover-background,rgba(127,127,127,.14));
+    }
+
+    .more ha-icon {
+      width:16px;
+      height:16px;
+      --mdc-icon-size:16px;
     }
 
     .menu-title {
@@ -237,25 +295,79 @@ export class EnergyTrendCard extends LitElement {
     }
 
     const yamlConfig = normalizeEnergyTrendCardConfig(config);
+    const previousConfig = this.config;
     const resolutionVersion = ++this.configResolutionVersion;
+    this.configSettled = false;
     this.configStorageId = this.getConfigStorageId(yamlConfig);
+    this.formalConfig = yamlConfig;
     this.config = yamlConfig;
     this.timeframe = this.config.timeframe ?? "24H";
-    if (this._hass) {
-      void this.loadHistory();
-    }
-    void this.configCoordinator
-      .resolve(this.configStorageId, yamlConfig)
-      .then((resolved) => {
+    void this.configCoordinator.resolve(this.configStorageId, yamlConfig)
+      .then(async (resolved) => {
         if (resolutionVersion !== this.configResolutionVersion) return;
-        this.config = resolved;
-        this.timeframe = resolved.timeframe ?? "24H";
-        this.requestUpdate();
-        if (this._hass) void this.loadHistory();
+        const scope = getPendingTrendScope(resolved);
+        const [storedPending, storedRemovals] = await Promise.all([
+          this.pendingSeriesRepository.load(scope),
+          this.pendingRemovalRepository.load(scope),
+        ]);
+        if (resolutionVersion !== this.configResolutionVersion) return;
+        const formalIds = new Set(resolved.entities.map((item) => item.id).filter(Boolean));
+        const formalEntities = new Set(resolved.entities.map((item) => item.entity));
+        this.pendingSeries = storedPending.filter((item) =>
+          !(item.id && formalIds.has(item.id)) &&
+          !formalEntities.has(item.entity)
+        ).map((item, index) => ({
+          ...item,
+          order:resolved.entities.length + index,
+        }));
+        if (this.pendingSeries.length !== storedPending.length) {
+          await this.pendingSeriesRepository.save(scope, this.pendingSeries);
+        }
+        this.pendingRemovals = storedRemovals.filter((removal) =>
+          resolved.entities.some((item) => matchesPendingTrendRemoval(item, removal))
+        );
+        if (this.pendingRemovals.length !== storedRemovals.length) {
+          await this.pendingRemovalRepository.save(scope, this.pendingRemovals);
+        }
+        const resolvedConfig = normalizeEnergyTrendCardConfig({
+          ...resolved,
+          entities:[
+            ...resolved.entities.filter((item) =>
+              !this.pendingRemovals.some((removal) => matchesPendingTrendRemoval(item, removal))
+            ),
+            ...this.pendingSeries,
+          ],
+        });
+        this.applyResolvedConfig(previousConfig,resolvedConfig);
       })
       .catch((error) => {
         console.error("[energy-trend-card] Unable to restore configuration", error);
+        if (resolutionVersion !== this.configResolutionVersion) return;
+        this.applyResolvedConfig(previousConfig,yamlConfig);
       });
+  }
+
+  private applyResolvedConfig(
+    previous:EnergyTrendCardConfig | undefined,
+    next:EnergyTrendCardConfig
+  ) {
+    const change = classifyTrendConfigChange(previous,next);
+    this.config = next;
+    this.formalConfig ??= next;
+    this.timeframe = next.timeframe ?? "24H";
+    this.series = applyTrendPresentationConfig(this.series,next);
+    const configuredIds = new Set(next.entities.map((entity) => entity.id).filter(Boolean));
+    this.hiddenSeriesIds = new Set(
+      [...this.hiddenSeriesIds].filter((id) => configuredIds.has(id))
+    );
+    this.configSettled = true;
+    this.requestUpdate();
+    if (!this._hass) return;
+    const needsInitialHistory = this.status === "idle" &&
+      !this.series.some((item) => item.points.length > 0);
+    if (change.reloadHistory || needsInitialHistory) {
+      void this.loadHistory({ preserveExisting:!change.entitySetChanged });
+    }
   }
 
   private getConfigStorageId(config: EnergyTrendCardConfig): string {
@@ -284,11 +396,13 @@ export class EnergyTrendCard extends LitElement {
     );
   }
 
-  private async loadHistory() {
+  private async loadHistory(options:{ preserveExisting?:boolean } = {}) {
     if (!this.config || !this._hass) return;
 
     const version = ++this.loadVersion;
-    this.status = "loading";
+    const preserveExisting = options.preserveExisting === true &&
+      this.series.some((item) => item.points.length > 0) && this.axes.length > 0;
+    if (!preserveExisting) this.status = "loading";
     this.errorMessage = "";
     this.requestUpdate();
 
@@ -316,10 +430,14 @@ export class EnergyTrendCard extends LitElement {
     } catch (error) {
       if (version !== this.loadVersion) return;
       console.error("[energy-trend-card] History load failed", error);
-      this.series = [];
-      this.axes = [];
-      this.status = "error";
       this.errorMessage = getHistoryErrorMessage(error);
+      if (preserveExisting) {
+        this.status = "ready";
+      } else {
+        this.series = [];
+        this.axes = [];
+        this.status = "error";
+      }
     }
 
     this.requestUpdate();
@@ -328,7 +446,9 @@ export class EnergyTrendCard extends LitElement {
   private changeTimeframe(timeframe: TrendTimeframe) {
     if (this.timeframe === timeframe) return;
     if (!this.config) return;
-    this.commitTrendConfig({ ...this.config, timeframe });
+    this.timeframe = timeframe;
+    this.requestUpdate();
+    void this.loadHistory();
     this.dispatchEvent(
       new CustomEvent("trend-timeframe-changed", {
         detail: { timeframe },
@@ -352,75 +472,68 @@ export class EnergyTrendCard extends LitElement {
     this.requestUpdate();
   }
 
-  private commitTrendConfig(config: EnergyTrendCardConfig) {
-    ++this.configResolutionVersion;
-    this.config = normalizeEnergyTrendCardConfig(config);
-    this.timeframe = this.config.timeframe ?? "24H";
-    const entityConfigs = new Map(
-      this.config.entities.map((entity) => [entity.entity, entity])
-    );
-    this.series = this.series.map((series) => {
-      const entity = entityConfigs.get(series.entity);
-      if (!entity) return series;
-      return {
-        ...series,
-        name:entity.name ?? series.name,
-        precision:entity.decimals ?? 2,
-        visible:entity.enabled !== false,
-        axisGroup:entity.axis === "left" || entity.axis === "right"
-          ? entity.axis
-          : undefined,
-        lineStyle:entity.lineStyle ?? "solid",
-        chartMode:entity.chartMode ?? "line",
-        renderMode:entity.renderMode,
-      };
-    });
-    this.requestUpdate();
-    void this.loadHistory();
-    void this.configCoordinator
-      .save(this.configStorageId, this.config)
-      .catch((error) => {
-        console.error("[energy-trend-card] Unable to save configuration", error);
-      });
-    this.dispatchEvent(new CustomEvent("config-changed", {
-      detail:{ config:this.config },
-      bubbles:true,
-      composed:true,
+  private requestTrendInspector(event: MouseEvent) {
+    const target = event.currentTarget as HTMLElement;
+    target.dispatchEvent(new CustomEvent("trend-inspect-request", {
+      detail: { title: this.config?.title ?? "Energy Trend" },
+      bubbles: true,
+      composed: true,
     }));
   }
 
-  private addSeries(entityId: string) {
-    if (!this.config || !this._hass?.states[entityId]) return;
+  private openTrendAnalysis(event: CustomEvent) {
+    event.stopPropagation();
+    this.analysisPanelOpen = true;
+    this.requestUpdate();
+  }
+
+  private closeTrendAnalysis() {
+    this.analysisPanelOpen = false;
+    this.requestUpdate();
+  }
+
+  private async addSeries(entityId: string) {
+    if (!this.config || !this.formalConfig || !this._hass?.states[entityId]) return;
     const state = this._hass.states[entityId];
     const unit = String(state.attributes.unit_of_measurement ?? "");
-    this.commitTrendConfig({
-      ...this.config,
-      entities:[
-        ...this.config.entities,
-        {
+    const discovered = this.discoveryMetrics.find(
+      (metric) => metric.entityId === entityId
+    );
+    const baseId = entityId.split(".").pop() || "series";
+    let id = baseId;
+    let suffix = 2;
+    while (this.config.entities.some((item) => item.id === id)) {
+      id = `${baseId}_${suffix++}`;
+    }
+    const pending:TrendEntityConfig = {
+          id,
           entity:entityId,
           order:this.config.entities.length,
           name:String(state.attributes.friendly_name ?? entityId),
           unit,
-          category:unit.includes("Wh") ? "energy" : "power",
+          category:discovered?.metricType === "energy"
+            ? "energy"
+            : discovered?.metricType === "cost" ? "cost" : "power",
           enabled:true,
+          visible:true,
+          chartMode:"area",
           decimals:2,
           autoScale:true,
-        },
-      ],
-    });
+    };
+    const added = await this.pendingSeriesRepository.add(
+      getPendingTrendScope(this.formalConfig),
+      pending
+    );
+    if (!added) return;
+    this.setConfig(this.formalConfig);
   }
 
-  private toggleSeriesVisibility(entityId: string) {
-    if (!this.config) return;
-    this.commitTrendConfig({
-      ...this.config,
-      entities:this.config.entities.map((entity) =>
-        entity.entity === entityId
-          ? { ...entity, enabled:entity.enabled === false }
-          : entity
-      ),
-    });
+  private async removeManagedSeries(entity:TrendEntityConfig, pending:boolean) {
+    if (!this.formalConfig) return;
+    const scope = getPendingTrendScope(this.formalConfig);
+    if (pending) await this.pendingSeriesRepository.remove(scope, entity.id ?? entity.entity, entity.entity);
+    else await this.pendingRemovalRepository.add(scope, entity);
+    this.setConfig(this.formalConfig);
   }
 
   private toggleSettingsMenu() {
@@ -434,19 +547,15 @@ export class EnergyTrendCard extends LitElement {
     const configured = new Set(
       this.config.entities.map((entity) => entity.entity)
     );
-    const availableEntities = Object.keys(this._hass?.states ?? {})
-      .filter((entityId) =>
-        isEnergyRelatedEntity(entityId, this._hass) && !configured.has(entityId)
-      )
-      .filter((entityId) => {
+    const availableEntities = getTrendDiscoveryCandidates(this.discoveryMetrics)
+      .filter((metric) => !configured.has(metric.entityId))
+      .filter((metric) => {
         const query = this.seriesSearch.trim().toLowerCase();
         if (!query) return true;
-        const friendlyName = String(
-          this._hass?.states[entityId]?.attributes.friendly_name ?? ""
-        ).toLowerCase();
-        return entityId.toLowerCase().includes(query) ||
-          friendlyName.includes(query);
-      });
+        return metric.entityId.toLowerCase().includes(query) ||
+          metric.name.toLowerCase().includes(query);
+      })
+      .map((metric) => metric.entityId);
 
     return html`
       <ic-section-header .title=${this.config.title ?? "Energy Trend"}>
@@ -458,7 +567,7 @@ export class EnergyTrendCard extends LitElement {
             @action-click=${this.toggleSettingsMenu}></ic-action-button>
           <ic-action-menu class="trend-menu">
               <div class="menu-title">Displayed Series</div>
-              ${this.config.entities.length ? this.config.entities.map((entity) => {
+              ${this.config.entities.length ? this.config.entities.map((entity, index) => {
                 const displayName = getTrendMenuName(
                   this._hass,
                   entity.entity,
@@ -467,14 +576,29 @@ export class EnergyTrendCard extends LitElement {
                 const compactDisplayName = truncateMiddle(displayName, {
                   maxLength:ENTITY_ID_DISPLAY_LENGTH.compactMenu,
                 });
+                const seriesId = entity.id ?? entity.entity;
+                const pending = this.pendingSeries.some((item) =>
+                  (item.id && item.id === entity.id) || item.entity === entity.entity
+                );
+                const seriesColor = getTrendSeriesColor(entity.color, index, seriesId);
                 return html`
-                <div class="series-manager-row ${entity.enabled === false ? "hidden-series" : ""}">
+                <div class="series-manager-row">
                   <ic-menu-item
-                    .selected=${entity.enabled !== false}
-                    .indicator=${entity.enabled === false ? "none" : "check"}
+                    indicator="dot"
+                    style=${`--ic-select-indicator-color:${seriesColor}`}
+                    .displayLabel=${compactDisplayName}
                     .rawLabel=${displayName}
-                    @click=${() => this.toggleSeriesVisibility(entity.entity)}>
-                    ${compactDisplayName}
+                    .rawSecondaryLabel=${entity.entity}
+                    >
+                    <span slot="secondary">${formatEntityId(entity.entity,"compactMenu")}</span>
+                    <button slot="trailing" class="more" type="button"
+                      aria-label=${`Remove ${displayName}`}
+                      @click=${(event:Event) => {
+                        event.stopPropagation();
+                        void this.removeManagedSeries(entity, pending);
+                      }}>
+                      <ha-icon icon="mdi:delete-outline"></ha-icon>
+                    </button>
                   </ic-menu-item>
                 </div>
               `;
@@ -508,11 +632,8 @@ export class EnergyTrendCard extends LitElement {
 
       <ic-glass-container
         style=${`--trend-card-height:${height}px`}
-        @click=${() => {
-          this.settingsDialogEntity = "";
-          this.settingsDialogOpen = true;
-          this.requestUpdate();
-        }}>
+        @click=${this.requestTrendInspector}
+        @trend-inspect-request=${this.openTrendAnalysis}>
         <div class="body">
           <div class="chart-header">
             <ic-trend-legend style="margin:0" .series=${this.series}
@@ -534,23 +655,16 @@ export class EnergyTrendCard extends LitElement {
         </div>
       </ic-glass-container>
 
-      <ic-trend-settings-dialog .open=${this.settingsDialogOpen}
+      <ic-trend-analysis-panel
+        .open=${this.analysisPanelOpen}
+        .title=${this.config.title ?? "Energy Trend"}
+        .timeframe=${this.timeframe}
+        .series=${this.series}
+        .status=${this.status}
         .hass=${this.hass}
-        .config=${this.config}
-        .selectedEntity=${this.settingsDialogEntity}
-        @trend-settings-close=${() => {
-          this.settingsDialogEntity = "";
-          this.settingsDialogOpen = false;
-          this.requestUpdate();
-        }}
-        @trend-settings-save=${(event: CustomEvent<TrendSettingsSaveDetail>) => {
-          event.stopPropagation(); this.settingsDialogEntity = ""; this.settingsDialogOpen = false;
-          this.commitTrendConfig(event.detail.config);
-        }}
-        @trend-settings-change=${(event: CustomEvent<TrendSettingsChangeDetail>) => {
-          event.stopPropagation();
-          this.commitTrendConfig(event.detail.config);
-        }}></ic-trend-settings-dialog>
+        .metrics=${this.discoveryMetrics}
+        @trend-analysis-close=${this.closeTrendAnalysis}
+      ></ic-trend-analysis-panel>
     `;
   }
 
